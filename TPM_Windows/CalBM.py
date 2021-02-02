@@ -7,7 +7,7 @@ calculate xy-ration and xy BM for given xy position csv
 @author: YCC
 """
 ###  input parameters
-path_folder = r'C:\Users\hwlab\Desktop\17-550bp-30ms-33fps'
+path_folder = r'C:\Users\OT-hwLi-lab\Desktop\YCC\20210127\qdot655\3281bp\3\4-200ms-110uM_BME'
 
 window_std = 20
 window_avg = 1
@@ -40,22 +40,25 @@ with open(file_path, newline='') as csvfile:
     y = []
     sx = []
     sy = []
+    intensity = []
     sheet = []
     for row in rows:
         sheet += [row]
-    bead_number = int(len(sheet[0])/4)
+    bead_number = int(len(sheet[0])/5)
     frame_number = len(sheet) - 1
-    bead_namexy = ['BMx '+str(i+1) for i in range(bead_number)]+['BMy '+str(i+1) for i in range(bead_number)]+['bsize '+str(i+1) for i in range(bead_number)]
+    bead_namexy = ['BMx '+str(i+1) for i in range(bead_number)]+['BMy '+str(i+1) for i in range(bead_number)]+['bsize '+str(i+1) for i in range(bead_number)]+['I '+str(i+1) for i in range(bead_number)]
     for i in range(frame_number):
         x += [sheet[i+1][0:bead_number]] 
         y += [sheet[i+1][(bead_number):bead_number*2]]
         sx += [sheet[i+1][(bead_number*2):bead_number*3]]
         sy += [sheet[i+1][(bead_number*3):bead_number*4]]
+        intensity += [sheet[i+1][(bead_number*4):bead_number*5]]
         
     x = np.array(x, dtype = np.float32)
     y = np.array(y, dtype = np.float32)
     sx = np.array(sx, dtype = np.float32)
     sy = np.array(sy, dtype = np.float32)
+    intensity = np.array(intensity, dtype = np.float32)
     BMx = []
     BMy = []
     for k in range(bead_number):
@@ -80,23 +83,26 @@ with open(file_path, newline='') as csvfile:
     BMx = factor_p2n * np.reshape(BMx, (bead_number,frame_number-window_std+1)).transpose()
     BMy = factor_p2n * np.reshape(BMy, (bead_number,frame_number-window_std+1)).transpose()
     BMz = sx*sy
+    I = intensity
 
 ###  select xy ratio
 BMx_mean = np.mean(np.transpose(BMx),1)
 if mode_select_xyratio == 'on': #select xy ratio
 
-    ratio_xy = (sum(BMx)/sum(BMy))
+    # ratio_xy = (sum(BMx)/sum(BMy))
+    ratio_xy = np.mean(BMx/BMy, axis=0)
     i_rxy_dele = [x for x in range(bead_number) if (ratio_xy[x] > upper_r_xy) or (ratio_xy[x] < lower_r_xy) or (BMx_mean[x] > 200)]
     BMx = np.delete(BMx,i_rxy_dele,axis = 1) # delete  (bead#)
     BMy = np.delete(BMy,i_rxy_dele,axis = 1)
     BMz = np.delete(BMz,i_rxy_dele,axis = 1)
-    
-    bead_namexy = np.delete(bead_namexy,i_rxy_dele+list(np.array(i_rxy_dele)+bead_number)+list(np.array(i_rxy_dele)+2*bead_number))
+    BMI = np.delete(I,i_rxy_dele,axis = 1)
+    bead_namexy = np.delete(bead_namexy,i_rxy_dele+list(np.array(i_rxy_dele)+bead_number)+list(np.array(i_rxy_dele)+2*bead_number)+list(np.array(i_rxy_dele)+3*bead_number))
     bead_sele_number = np.shape(BMx)[1]
-    BMxyz = np.empty((frame_number, bead_sele_number*3))
+    BMxyz = np.empty((frame_number, bead_sele_number*4))
     BMxyz[:frame_number-window_std+1,:bead_sele_number] = BMx
     BMxyz[:frame_number-window_std+1,bead_sele_number:bead_sele_number*2] = BMy
-    BMxyz[:,bead_sele_number*2:] = BMz
+    BMxyz[:,bead_sele_number*2:bead_sele_number*3] = BMz
+    BMxyz[:,bead_sele_number*3:] = BMI
     # bead_namexy
 else:
 
@@ -104,6 +110,7 @@ else:
     BMxyz[:frame_number-window_std+1,:bead_sele_number] = BMx
     BMxyz[:frame_number-window_std+1,bead_sele_number:bead_sele_number*2] = BMy
     BMxyz[:,bead_sele_number*2:] = BMz
+    
 BMx_mean = np.mean(np.transpose(BMx),1)
 
 ###  save to csv

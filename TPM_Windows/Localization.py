@@ -11,7 +11,7 @@ two classes, for glimpse information(data_folder) and data manipulatin(Gimage)
 """
 
 ### setting parameters
-path_folder = r'/home/hwligroup/桌面/YCC/17-550bp-30ms-33fps'
+path_folder = r'C:\Users\OT-hwLi-lab\Desktop\YCC\20210127\qdot655\3281bp\3\4-200ms-110uM_BME'
 
 criteria_dist = 5 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
@@ -260,9 +260,9 @@ class Gimage:
     def drawAOI(self):
         n = len(self.cX)
         for i in range(n):
-            cv2.circle(self.image, (int(self.cX[i]), int(self.cY[i])), self.AOI_size, (0, 0, 0), 1)
+            cv2.circle(self.image, (int(self.cX[i]), int(self.cY[i])), self.AOI_size, (255, 255, 255), 1)
             cv2.putText(self.image, str(i+1), (int(self.cX[i]+10), int(self.cY[i]+10))
-                        , cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 1, cv2.LINE_AA)
+                        , cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
         return self.image
 
         
