@@ -11,7 +11,7 @@ two classes, for glimpse information(data_folder) and data manipulatin(Gimage)
 """
 
 ### setting parameters
-path_folder = r'/home/hwligroup/桌面/YCC/17-550bp-30ms-33fps'
+path_folder = r'/home/hwligroup/Desktop/YCC/20210127/qdot655/3281bp/3/4-200ms-110uM_BME'
 
 criteria_dist = 5 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
@@ -34,7 +34,7 @@ import os
 from glob import glob
 import datetime
 from PIL import Image,ImageEnhance
-
+import pandas as pd
 
 ### getting parameters
 today = datetime.datetime.now()
@@ -44,9 +44,10 @@ filename_time = str(today.year)+str(today.month)+str(today.day)
 class data_folder:
     def __init__(self, path_folder):
         self.path_folder = os.path.abspath(path_folder)
-        self.path_header = os.path.abspath(path_folder + '\header.glimpse')
+        self.path_header = os.path.join(path_folder, 'header.glimpse')
         self.path_header_utf8 = self.path_header.encode('utf8')
-        self.path_data = [x for x in glob(self.path_folder + '/*.glimpse') if x != self.path_header ]
+        self.path_header_txt = os.path.join(path_folder, 'header.txt')
+        self.path_data = [x for x in sorted(glob(self.path_folder + '/*.glimpse')) if x != self.path_header]
         self.header = []
         ### get file info.
         self.size_a_image = 0  # 8bit format default
@@ -55,35 +56,42 @@ class data_folder:
         self.frame_per_file = []
         self.frame_total = 0 # cal frame number of this file
         self.info = []
-    def getheader(self):
-        mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
-        GetHeader = mydll.ReadHeader  # function name is ReadHeader
-        # assign variable first (from LabVIEW)
-        # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber, 
-        # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (avg. fps (Hz)),uint32_t *Element0OfTTB, 
-        # int32_t *RegionHeight, int32_t *RegionWidth, 
-        # uint32_t *FramesAcquired)
-        # ignore array datatype in header.glimpse
-        GetHeader.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint),
-                      ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint),
-                      ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
-                      ctypes.POINTER(ctypes.c_uint))
-        offset = ctypes.c_int(1)
-        fileNumber = ctypes.c_uint(1)
-        PixelDepth = ctypes.c_uint(1)
-        Element0OfTTB = ctypes.c_uint(1)    
-        timeOf1stFrameSecSince1104 = ctypes.c_double(1)
-        RegionHeight = ctypes.c_int(1)
-        RegionWidth = ctypes.c_int(1)
-        FramesAcquired = ctypes.c_uint(1)
-        
-        GetHeader(self.path_header_utf8, offset, fileNumber, 
-                  PixelDepth, timeOf1stFrameSecSince1104, Element0OfTTB, 
-                  RegionHeight, RegionWidth, 
-                  FramesAcquired) # There are 8 variables.
-        self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value, 
-            PixelDepth.value, offset.value, fileNumber.value, 
-            Element0OfTTB.value, timeOf1stFrameSecSince1104.value]
+    # def getheader(self):
+    #     mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
+    #     GetHeader = mydll.ReadHeader  # function name is ReadHeader
+    #     # assign variable first (from LabVIEW)
+    #     # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber,
+    #     # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (avg. fps (Hz)),uint32_t *Element0OfTTB,
+    #     # int32_t *RegionHeight, int32_t *RegionWidth,
+    #     # uint32_t *FramesAcquired)
+    #     # ignore array datatype in header.glimpse
+    #     GetHeader.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint),
+    #                   ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint),
+    #                   ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+    #                   ctypes.POINTER(ctypes.c_uint))
+    #     offset = ctypes.c_int(1)
+    #     fileNumber = ctypes.c_uint(1)
+    #     PixelDepth = ctypes.c_uint(1)
+    #     Element0OfTTB = ctypes.c_uint(1)
+    #     timeOf1stFrameSecSince1104 = ctypes.c_double(1)
+    #     RegionHeight = ctypes.c_int(1)
+    #     RegionWidth = ctypes.c_int(1)
+    #     FramesAcquired = ctypes.c_uint(1)
+    #
+    #     GetHeader(self.path_header_utf8, offset, fileNumber,
+    #               PixelDepth, timeOf1stFrameSecSince1104, Element0OfTTB,
+    #               RegionHeight, RegionWidth,
+    #               FramesAcquired) # There are 8 variables.
+    #     self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value,
+    #         PixelDepth.value, offset.value, fileNumber.value,
+    #         Element0OfTTB.value, timeOf1stFrameSecSince1104.value]
+
+    def getheader_txt(self):
+        df = pd.read_csv(self.path_header_txt, sep='\t', header=None)
+        header_names = df[0].to_numpy()
+        header_values = df[1].to_numpy()
+        self.header = [int(header_values[0]), int(header_values[2]), int(header_values[1]), int(header_values[4]), header_values[3]]
+        # frames, height, width, pixeldepth, avg fps
     
     def getdatainfo(self):       
         ### get file info.
@@ -260,9 +268,9 @@ class Gimage:
     def drawAOI(self):
         n = len(self.cX)
         for i in range(n):
-            cv2.circle(self.image, (int(self.cX[i]), int(self.cY[i])), self.AOI_size, (0, 0, 0), 1)
+            cv2.circle(self.image, (int(self.cX[i]), int(self.cY[i])), self.AOI_size, (255, 255, 255), 1)
             cv2.putText(self.image, str(i+1), (int(self.cX[i]+10), int(self.cY[i]+10))
-                        , cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 1, cv2.LINE_AA)
+                        , cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
         return self.image
 
         
@@ -277,7 +285,7 @@ def localize(path_folder, settings = [5,20,0,10,10,30,90,230]): # four steps, ge
     print('opening file...')
     # with open(file_name[0], 'rb') as f:
     folder = data_folder(path_folder)
-    folder.getheader()
+    folder.getheader_txt()
     folder.getdatainfo()
     info = folder.info
     Gdata = Gimage(info, criteria_dist, aoi_size)
@@ -309,7 +317,7 @@ def localize(path_folder, settings = [5,20,0,10,10,30,90,230]): # four steps, ge
 # ### get parameters
 # header, size_a_image, file_name, frame_per_file, frame_total = getparameters()
 
-### main to get localization information
+## main to get localization information
 if __name__ == '__main__':
     Gdata, folder = localize(path_folder)
     image_localization = Gdata.image
