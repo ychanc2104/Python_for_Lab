@@ -12,28 +12,29 @@ Read one image of glimpse file
 """
 
 ### setting parameters
-path_folder = r'C:\Users\OT-hwLi-lab\Desktop\YCC\20210127\qdot655\3281bp\3\4-200ms-110uM_BME'
+path_folder = r'C:\Users\OT-hwLi-lab\Desktop\YCC\20210205\2-836bp\1-1-200ms-440uM_BME_power50'
 
 size_tofit = 10
 read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile 
-frame_setread_num = 20 # only useful when mode = 0, can't exceed frame number of a file
+frame_setread_num = 300 # only useful when mode = 0, can't exceed frame number of a file
 
 fit_mode = 'multiprocessing' #'multiprocessing'
 path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
 
 criteria_dist = 5 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
-frame_read_forcenter = 1 # no need to change, frame to autocenter beads
+frame_read_forcenter = 0 # no need to change, frame to autocenter beads
 N_loc = 30
 contrast = 10
 low = 50
 high = 150
 blacklevel = 50
 ### preparing input parameters
-settings = [size_tofit, ,read_mode, frame_setread_num, criteria_dist, aoi_size, frame_read_forcenter, N_loc, contrast, low, high, blacklevel]
+settings = [criteria_dist, aoi_size, frame_read_forcenter, N_loc, contrast, low, high, blacklevel]
 ### import used modules first
 import scipy.optimize as opt
 import math
+from sys import platform
 import multiprocessing as mp
 import ctypes
 import struct
@@ -134,36 +135,131 @@ class Header:
 
 ### define a class for all glimpse data
 class Gimage:
-    def __init__(self, info, criteria_dist = 10, aoi_size = 20):
+    def __init__(self, path_folder, criteria_dist = 10, aoi_size = 20, frame_read_forcenter = 0, 
+                 N_loc = 20, contrast = 10, low = 50, high = 150, blacklevel = 50):
         ##  info: [[header], [frame_per_file], [path_data], data_type, size_a_image]
-        self.header = info[0]
-        self.frame_per_file = info[1]
-        self.path_data = info[2]
-        self.data_type = info[3]
-        self.size_a_image = info[4]
-        # self.frame = frame_i
-        self.height = self.header[1]
-        self.width = self.header[2]
+        self.path_folder = os.path.abspath(path_folder)
+        self.path_header = os.path.join(path_folder, 'header.glimpse')
+        self.path_header_utf8 = self.path_header.encode('utf8')
+        self.path_data = [x for x in sorted(glob(self.path_folder + '/*.glimpse')) if x != self.path_header ]
+        [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
+        [self.frame_per_file, self.path_data, self.data_type, self.size_a_image] = self.getdatainfo()
+
+        self.criteria = criteria_dist
+        self.AOI_size = aoi_size
+        self.frame_read_forcenter = frame_read_forcenter
+        self.N_loc = N_loc
+        self.contrast = contrast
+        self.low = low
+        self.high = high
+        self.blacklevel = blacklevel
+        self.offset, self.fileNumber = self.getoffset()
+        
         
         self.read1 = [] # one image at i
         self.readN = [] # N image from i
-        self.offset = []
-        self.fileNumber = []
-        self.contours = []
-        self.edges = []
+
+        # self.offset = []
+        # self.fileNumber = []
+        # self.contours = []
+        # self.edges = []
         self.cX = []
         self.cY = []
         self.perimeters = []
         self.areas = []
         self.radius_save = []
-        self.criteria = criteria_dist
-        self.AOI_size = aoi_size
+
         self.image = [] # image used to process
         self.intensity = []
         self.image_cut = []
         self.AOIimage = []
-
+        
+        
+    def localize(self):
+        print('start centering')
+        imageN = self.readGlimpseN(self.frame_read_forcenter, self.N_loc)
+        image = self.stackimageN(imageN)
+        self.loadimage(image)
+        image = self.contrast(self.contrast)
+        contours = self.getContour(self.low, self.high)
+        cX, cY = self.getXY(contours)
+        
+        
+        
+        self.Header.getheader()
+        info = self.Header.getdatainfo()
+        
+        self.Gdata = Gimage(info, self.criteria_dist, self.aoi_size)
+        self.Gdata.getoffset()
+        imageN = self.Gdata.readGlimpseN(frame_read_forcenter, N)
+        image = self.Gdata.stackimageN(imageN)
+        self.Gdata.loadimage(image)
+        self.Gdata.contrast(contrast)
+        self.Gdata.getContour(low, high)
+        self.Gdata.getXY()
+        self.Gdata.removeXY()    
+        self.Gdata.getintensity(aoisize=self.aoi_size)
+        self.Gdata.removeblack(blacklevel)
+        self.Gdata.drawAOI()
+        print('finish centering')    
     
+
+    def getheader(self):
+        if platform == 'win32':
+            mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
+            GetHeader = mydll.ReadHeader  # function name is ReadHeader
+            # assign variable first (from LabVIEW)
+            # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber, 
+            # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (avg. fps (Hz)),uint32_t *Element0OfTTB, 
+            # int32_t *RegionHeight, int32_t *RegionWidth, 
+            # uint32_t *FramesAcquired)
+            # ignore array datatype in header.glimpse
+            GetHeader.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint),
+                          ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint),
+                          ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+                          ctypes.POINTER(ctypes.c_uint))
+            offset = ctypes.c_int(1)
+            fileNumber = ctypes.c_uint(1)
+            PixelDepth = ctypes.c_uint(1)
+            Element0OfTTB = ctypes.c_uint(1)    
+            timeOf1stFrameSecSince1104 = ctypes.c_double(1)
+            RegionHeight = ctypes.c_int(1)
+            RegionWidth = ctypes.c_int(1)
+            FramesAcquired = ctypes.c_uint(1)
+            
+            GetHeader(self.path_header_utf8, offset, fileNumber, 
+                      PixelDepth, timeOf1stFrameSecSince1104, Element0OfTTB, 
+                      RegionHeight, RegionWidth, 
+                      FramesAcquired) # There are 8 variables.
+            self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value, 
+                PixelDepth.value, timeOf1stFrameSecSince1104.value]
+            # [frames, height, width, pixeldepth, avg fps]
+            return self.header
+        else: # is linux
+            df = pd.read_csv(self.path_header_txt, sep='\t', header=None)
+            header_names = df[0].to_numpy()
+            header_values = df[1].to_numpy()
+            self.header = [int(header_values[0]), int(header_values[2]), int(header_values[1]), int(header_values[4]), header_values[3]]
+            [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.header
+            # [frames, height, width, pixeldepth, avg fps]
+            return self.header
+
+    def getdatainfo(self):       
+        ### get file info.
+        if self.header[3] == 0: # 8 bit integer
+            self.data_type = 'B'
+            pixel_depth = 1
+        else:
+            self.data_type = 'h'
+            pixel_depth = 2
+        self.size_a_image = self.header[1] * self.header[2] * pixel_depth  # 8bit format default
+        self.file_size = [Path(x).stat().st_size for x in self.path_data] 
+        self.frame_per_file = [int(x/self.size_a_image) for x in self.file_size]
+        self.frame_total = sum(self.frame_per_file) # cal frame number of this file
+        info = [self.frame_per_file, self.path_data, self.data_type, self.size_a_image]
+        return info
+
+
     ##  get offset array
     def getoffset(self):
         self.size_a_image = self.header[1] * self.header[2]
@@ -181,8 +277,9 @@ class Gimage:
             else:
                 a = 0
                 b += 1
-        self.offset = offset
-        self.fileNumber = fileNumber
+        # self.offset = offset
+        # self.fileNumber = fileNumber
+        return offset, fileNumber
                   
     ##  read one image at frame_i (0,1,2,...,N-1)
     def readGlimpse1(self, frame_i = 0):
@@ -211,36 +308,37 @@ class Gimage:
         self.readN = np.reshape(decoded_data, (N, self.height, self.width) )
         return self.readN
     
-    ##  load image
-    def loadimage(self, image):    
-            self.image = image
-    
     ##  stack multiple images    
     def stackimageN(self, imageN):
         return np.mean((imageN.T), 2).T.astype('uint8')
+
+    ##  load image
+    def loadimage(self, image):    
+            self.image = image
 
     ##  enhance contrast
     def contrast(self, contrast = 1):
         enh_con = ImageEnhance.Contrast(Image.fromarray(self.image))
         image_contrasted = enh_con.enhance(contrast)
-        self.image = np.array(image_contrasted)
-        return self.image
+        image = np.array(image_contrasted)
+        return image
         
     
     ##  get egde using frame in file,f
     def getContour(self, low = 30, high = 90): 
         ##  get edges using openCV
         self.image_cut = np.uint8(self.image[0+18:self.height-18, 0+32:self.width-32])
-        self.edges = cv2.Canny(self.image_cut, low, high) # cv2.Canny(image, a, b), reject value < a and detect value > b
+        edges = cv2.Canny(self.image_cut, low, high) # cv2.Canny(image, a, b), reject value < a and detect value > b
         # ret, thresh = cv2.threshold(self.edges, 0, 50, cv2.THRESH_BINARY) # THRESH_BINARY: transform into black/white depending on low/high value
-        self.contours, hierarchy = cv2.findContours(self.edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return contours
 
     ##  get center point using moment of edge
-    def getXY(self):
+    def getXY(self, contours):
         radius = []
-        n_contours = len(self.contours)
+        n_contours = len(contours)
         for i in range(n_contours):
-            c = self.contours[i]
+            c = contours[i]
             self.perimeters += [cv2.arcLength(c, True)]
             self.areas += [cv2.contourArea(c)]
             if (self.perimeters[-1] <= 6) | (self.areas[-1] <= 2) | (len(c) < 4):
@@ -252,9 +350,10 @@ class Gimage:
                 self.radius_save += [radius[-1]]
                 self.cX +=  [(M['m10'] / M['m00'])+32]
                 self.cY +=  [(M['m01'] / M['m00'])+18]   
+        return cX, cY
 
     ## remove beads are too close, choose two image, refer to smaller bead#
-    def removeXY(self): 
+    def removeXY(self, cX, cY, criteria): 
         cX1 = np.array(self.cX) # len of cXr1 is smaller, as ref
         cY1 = np.array(self.cY)
         i_dele = np.empty(0).astype(int)
@@ -301,10 +400,10 @@ class Gimage:
 
 
 ##  2-D Gaussian function with rotation angle
-def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_rad, offset):
+def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
     xo = float(xo)
     yo = float(yo)
-    theta = theta_rad/360*(2*math.pi) # in degree
+    theta = theta_deg/360*(2*math.pi) # in rad
     x = xy[0]
     y = xy[1]    
     a = (np.cos(theta)**2)/(2*sigma_x**2) + (np.sin(theta)**2)/(2*sigma_y**2)
@@ -315,62 +414,62 @@ def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_rad, offset):
     return g.ravel()
 
 
-class Ganalyze:
-    def __init__(self, path_folder, settings):
-        self.size_tofit, ,self.read_mode, self.frame_setread_num, self.criteria_dist, self.aoi_size, self.frame_read_forcenter, self.N, self.contrast, self.low, self.high, self.blacklevel = settings
-        self.Header = Header(path_folder)
-        self.Gdata = []
-        self.aoi = []
-        self.parameters = []
-        self.N = [] #total frames to fit
-        self.x = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-        self.y = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
+# class Ganalyze:
+#     def __init__(self, path_folder, settings):
+#         self.size_tofit, ,self.read_mode, self.frame_setread_num, self.criteria_dist, self.aoi_size, self.frame_read_forcenter, self.N, self.contrast, self.low, self.high, self.blacklevel = settings
+#         self.Header = Header(path_folder)
+#         self.Gdata = []
+#         self.aoi = []
+#         self.parameters = []
+#         self.N = [] #total frames to fit
+#         self.x = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
+#         self.y = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
       
-        def localize(self):
-        # self.Header = Header(path_folder)
-        print('start centering')
-        self.Header.getheader()
-        info = self.Header.getdatainfo()
+#         def localize(self):
+#         # self.Header = Header(path_folder)
+#         print('start centering')
+#         self.Header.getheader()
+#         info = self.Header.getdatainfo()
         
-        self.Gdata = Gimage(info, self.criteria_dist, self.aoi_size)
-        self.Gdata.getoffset()
-        imageN = self.Gdata.readGlimpseN(frame_read_forcenter, N)
-        image = self.Gdata.stackimageN(imageN)
-        self.Gdata.loadimage(image)
-        self.Gdata.contrast(contrast)
-        self.Gdata.getContour(low, high)
-        self.Gdata.getXY()
-        self.Gdata.removeXY()    
-        self.Gdata.getintensity(aoisize=self.aoi_size)
-        self.Gdata.removeblack(blacklevel)
-        self.Gdata.drawAOI()
-        print('finish centering')
+#         self.Gdata = Gimage(info, self.criteria_dist, self.aoi_size)
+#         self.Gdata.getoffset()
+#         imageN = self.Gdata.readGlimpseN(frame_read_forcenter, N)
+#         image = self.Gdata.stackimageN(imageN)
+#         self.Gdata.loadimage(image)
+#         self.Gdata.contrast(contrast)
+#         self.Gdata.getContour(low, high)
+#         self.Gdata.getXY()
+#         self.Gdata.removeXY()    
+#         self.Gdata.getintensity(aoisize=self.aoi_size)
+#         self.Gdata.removeblack(blacklevel)
+#         self.Gdata.drawAOI()
+#         print('finish centering')
         
-     ### get parameters for trackbead fitting
-    def get_fit_info(self): 
-        self.x = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-        self.y = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-        self.aoi = [self.Gdata.cX, self.Gdata.cY]
-        bead_number = len(aoi[0])
-        initial_guess = [40,3,3,11,11,0,10]
-        self.parameters = [initial_guess] * bead_number
-        if self.read_mode == 0:
-            self.N = frame_setread_num
-        else:
-            self.N = self.Header.frame_total
-        return x, y, aoi, bead_number, initial_guess, parameters, N       
+#      ### get parameters for trackbead fitting
+#     def get_fit_info(self): 
+#         self.x = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
+#         self.y = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
+#         self.aoi = [self.Gdata.cX, self.Gdata.cY]
+#         bead_number = len(aoi[0])
+#         initial_guess = [40,3,3,11,11,0,10]
+#         self.parameters = [initial_guess] * bead_number
+#         if self.read_mode == 0:
+#             self.N = frame_setread_num
+#         else:
+#             self.N = self.Header.frame_total
+#         return x, y, aoi, bead_number, initial_guess, parameters, N       
         
 
     
 
     
-    def getAOI(image, row, col, aoi_size=20):
-        row = int(row) # cY, height
-        col = int(col)   # cX, width
-        size_half = int(aoi_size/2)
-        image_cut = image[row-size_half:(row+size_half), col-size_half:(col+size_half)]
-        intensity = np.sum(image_cut)
-        return image_cut, intensity
+#     def getAOI(image, row, col, aoi_size=20):
+#         row = int(row) # cY, height
+#         col = int(col)   # cX, width
+#         size_half = int(aoi_size/2)
+#         image_cut = image[row-size_half:(row+size_half), col-size_half:(col+size_half)]
+#         intensity = np.sum(image_cut)
+#         return image_cut, intensity
     
 
 
