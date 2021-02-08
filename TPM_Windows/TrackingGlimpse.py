@@ -12,7 +12,7 @@ Read one image of glimpse file
 """
 
 ### setting parameters
-path_folder = r'C:\Users\OT-hwLi-lab\Desktop\YCC\20210205\2-836bp\1-1-200ms-440uM_BME_power50'
+path_folder = r'F:\YCC\20210205\1-555bp\1-200ms-440uM_BME_gain20'
 
 size_tofit = 10
 read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile 
@@ -21,14 +21,14 @@ frame_setread_num = 300 # only useful when mode = 0, can't exceed frame number o
 fit_mode = 'multiprocessing' #'multiprocessing'
 path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
 
-criteria_dist = 5 # beabs are closer than 'criteria_dist' will remove
+criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
 frame_read_forcenter = 0 # no need to change, frame to autocenter beads
-N_loc = 30
-contrast = 10
+N_loc = 10
+contrast = 15
 low = 50
 high = 150
-blacklevel = 50
+blacklevel = 30
 ### preparing input parameters
 settings = [criteria_dist, aoi_size, frame_read_forcenter, N_loc, contrast, low, high, blacklevel]
 ### import used modules first
@@ -134,7 +134,7 @@ class Header:
         
 
 ### define a class for all glimpse data
-class Gimage:
+class BinaryImage:
     def __init__(self, path_folder, criteria_dist = 10, aoi_size = 20, frame_read_forcenter = 0, 
                  N_loc = 20, contrast = 10, low = 50, high = 150, blacklevel = 50):
         ##  info: [[header], [frame_per_file], [path_data], data_type, size_a_image]
@@ -145,8 +145,8 @@ class Gimage:
         [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
         [self.frame_per_file, self.path_data, self.data_type, self.size_a_image] = self.getdatainfo()
 
-        self.criteria = criteria_dist
-        self.AOI_size = aoi_size
+        self.criteria_dist = criteria_dist
+        self.aoi_size = aoi_size
         self.frame_read_forcenter = frame_read_forcenter
         self.N_loc = N_loc
         self.contrast = contrast
@@ -168,40 +168,25 @@ class Gimage:
         self.perimeters = []
         self.areas = []
         self.radius_save = []
-
         self.image = [] # image used to process
-        self.intensity = []
-        self.image_cut = []
-        self.AOIimage = []
+        # self.intensity = []
+        # self.image_cut = []
+        # self.AOIimage = []
         
         
     def localize(self):
         print('start centering')
         imageN = self.readGlimpseN(self.frame_read_forcenter, self.N_loc)
         image = self.stackimageN(imageN)
-        self.loadimage(image)
-        image = self.contrast(self.contrast)
-        contours = self.getContour(self.low, self.high)
+        image = self.enhance_contrast(image, self.contrast)
+        contours = self.getContour(image, self.low, self.high)
         cX, cY = self.getXY(contours)
-        
-        
-        
-        self.Header.getheader()
-        info = self.Header.getdatainfo()
-        
-        self.Gdata = Gimage(info, self.criteria_dist, self.aoi_size)
-        self.Gdata.getoffset()
-        imageN = self.Gdata.readGlimpseN(frame_read_forcenter, N)
-        image = self.Gdata.stackimageN(imageN)
-        self.Gdata.loadimage(image)
-        self.Gdata.contrast(contrast)
-        self.Gdata.getContour(low, high)
-        self.Gdata.getXY()
-        self.Gdata.removeXY()    
-        self.Gdata.getintensity(aoisize=self.aoi_size)
-        self.Gdata.removeblack(blacklevel)
-        self.Gdata.drawAOI()
-        print('finish centering')    
+        cX, cY = self.removeXY(cX, cY, self.criteria_dist)
+        intensity = self.getintensity(image, cX, cY, self.aoi_size)
+        cX, cY = self.removeblack(cX, cY, intensity, blacklevel)
+        image = self.drawAOI(image, cX, cY, self.aoi_size)
+        print('finish centering')
+        return image, cX, cY
     
 
     def getheader(self):
@@ -317,18 +302,18 @@ class Gimage:
             self.image = image
 
     ##  enhance contrast
-    def contrast(self, contrast = 1):
-        enh_con = ImageEnhance.Contrast(Image.fromarray(self.image))
+    def enhance_contrast(self, image, contrast = 10):
+        enh_con = ImageEnhance.Contrast(Image.fromarray(image))
         image_contrasted = enh_con.enhance(contrast)
         image = np.array(image_contrasted)
         return image
         
     
     ##  get egde using frame in file,f
-    def getContour(self, low = 30, high = 90): 
+    def getContour(self, image, low = 30, high = 90): 
         ##  get edges using openCV
-        self.image_cut = np.uint8(self.image[0+18:self.height-18, 0+32:self.width-32])
-        edges = cv2.Canny(self.image_cut, low, high) # cv2.Canny(image, a, b), reject value < a and detect value > b
+        image_cut = np.uint8(image[0+18:self.height-18, 0+32:self.width-32])
+        edges = cv2.Canny(image_cut, low, high) # cv2.Canny(image, a, b), reject value < a and detect value > b
         # ret, thresh = cv2.threshold(self.edges, 0, 50, cv2.THRESH_BINARY) # THRESH_BINARY: transform into black/white depending on low/high value
         contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contours
@@ -337,6 +322,8 @@ class Gimage:
     def getXY(self, contours):
         radius = []
         n_contours = len(contours)
+        cX = []
+        cY = []
         for i in range(n_contours):
             c = contours[i]
             self.perimeters += [cv2.arcLength(c, True)]
@@ -348,14 +335,14 @@ class Gimage:
             #(1 < radius[-1] < 5) & (M['m10'] != 0) & (M['m01'] != 0)
             if (M['m00'] != 0):            
                 self.radius_save += [radius[-1]]
-                self.cX +=  [(M['m10'] / M['m00'])+32]
-                self.cY +=  [(M['m01'] / M['m00'])+18]   
+                cX +=  [(M['m10'] / M['m00'])+32]
+                cY +=  [(M['m01'] / M['m00'])+18]   
         return cX, cY
 
     ## remove beads are too close, choose two image, refer to smaller bead#
     def removeXY(self, cX, cY, criteria): 
-        cX1 = np.array(self.cX) # len of cXr1 is smaller, as ref
-        cY1 = np.array(self.cY)
+        cX1 = np.array(cX) # len of cXr1 is smaller, as ref
+        cY1 = np.array(cY)
         i_dele = np.empty(0).astype(int)
         for i in range(len(cX1)):
             dx = cX1 - cX1[i]
@@ -363,40 +350,50 @@ class Gimage:
             dr = np.sqrt(dx**2 + dy**2)
             # i_dr = np.argsort(dr)
             # i_XYr_self = i_dr[0]
-            if any(dr[dr != 0] <= self.criteria):
+            if any(dr[dr != 0] <= criteria):
                 i_dele = np.append(i_dele, int(i))                
-        self.cX = np.delete(cX1, i_dele)
-        self.cY = np.delete(cY1, i_dele)
-        self.radius_save = np.delete(self.radius_save, i_dele)      
+        cX = np.delete(cX1, i_dele)
+        cY = np.delete(cY1, i_dele)
+        self.radius_save = np.delete(self.radius_save, i_dele)
+        return cX, cY
         
     ##  get intensity of AOI
-    def getintensity(self, aoisize = 20): # i: bead number: 1,2,3,...,N
-        half_size = int(aoisize/2)    
-        for i in range(len(self.cX)):
-            horizontal = int(self.cY[i]) # width
-            vertical = int(self.cX[i])   # height
-            self.intensity += [np.mean(self.image[horizontal-half_size:(horizontal+half_size), vertical-half_size:(vertical+half_size)])] # [x,y] = [width, height]
-        self.intensity = np.array(self.intensity) 
+    def getintensity(self, image, cX, cY, aoi_size = 20): # i: bead number: 1,2,3,...,N
+        half_size = int(aoi_size/2)    
+        intensity = []
+        for i in range(len(cX)):
+            horizontal = int(cY[i]) # width
+            vertical = int(cX[i])   # height
+            intensity += [np.mean(image[horizontal-half_size:(horizontal+half_size), vertical-half_size:(vertical+half_size)])] # [x,y] = [width, height]
+        intensity = np.array(intensity)
+        return intensity
         
     ##  remove low intensity aoi
-    def removeblack(self, blacklevel = 150):
+    def removeblack(self, cX, cY, intensity, blacklevel = 150):
         i_dele = np.empty(0).astype(int)
-        for i in range(len(self.cX)):
-            if self.intensity[i] < blacklevel:
+        for i in range(len(cX)):
+            if intensity[i] < blacklevel:
                 i_dele = np.append(i_dele, int(i))
-        self.cX = np.delete(self.cX, i_dele)
-        self.cY = np.delete(self.cY, i_dele)
+        cX = np.delete(cX, i_dele)
+        cY = np.delete(cY, i_dele)
         self.radius_save = np.delete(self.radius_save, i_dele)
-        self.intensity = np.delete(self.intensity, i_dele)
+        intensity = np.delete(intensity, i_dele)
+        return cX, cY
         
     ##  plot X,Y AOI in given image
-    def drawAOI(self):
-        n = len(self.cX)
+    def drawAOI(self, image, cX, cY, aoi_size = 20):
+        n = len(cX)
         for i in range(n):
-            cv2.circle(self.image, (int(self.cX[i]), int(self.cY[i])), self.AOI_size, (255, 255, 255), 1)
-            cv2.putText(self.image, str(i+1), (int(self.cX[i]+10), int(self.cY[i]+10))
+            cv2.circle(image, (int(cX[i]), int(cY[i])), aoi_size, (255, 255, 255), 1)
+            cv2.putText(image, str(i+1), (int(cX[i]+10), int(cY[i]+10))
                         , cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
-        return self.image
+        return image
+    
+    def show_grayimage(self, image, save = True):
+        plt.figure()
+        plt.imshow(image, cmap='gray', vmin=0, vmax=255)
+        if save == True:
+            cv2.imwrite(os.path.join(self.path_folder, 'output.png'), image)
 
 
 ##  2-D Gaussian function with rotation angle
@@ -503,7 +500,7 @@ def localize(path_folder, settings = [5,20,0,10,10,30,90,230]): # four steps, ge
     return Gdata, folder
 
 
-### get image of certain AOI
+### get image-cut of certain AOI
 def getAOI(image, row, col, aoi_size=20):
     row = int(row) # cY, height
     col = int(col)   # cX, width
@@ -738,52 +735,66 @@ def get_saved_name():
 
 
 
-### main to get localization information
-Gdata, folder = localize(path_folder, settings)
-image_localization = Gdata.image
-plt.figure()
-plt.imshow(image_localization, cmap='gray', vmin=0, vmax=255)
-cv2.imwrite(os.path.abspath(path_folder) + '/output.png', image_localization)
+Gdata = BinaryImage(path_folder, criteria_dist = criteria_dist, aoi_size = aoi_size,
+                    frame_read_forcenter = frame_read_forcenter, N_loc = N_loc,
+                    contrast = contrast, low = low, high = high, blacklevel = blacklevel)
+image, cX, cY = Gdata.localize()
+Gdata.show_grayimage(image, save = True)
 
-##  initialize fitting parameters
-x, y, aoi, bead_number, initial_guess, parameters, N = preparefit_info(read_mode)
 
-##  start multi-processing using .map()
-t1 = time.time()
-if __name__ == '__main__':
-    result = []
-    p0 = np.array(parameters)
-    for i in range(N):
-        image = Gdata.readGlimpse1(i)
-        data, parameters = trackbead2(image, i+1, p0)
-        p0 = update_p0(p0, parameters, i+1)
-        result += data
-        print(f'frame {i+1}')
-    result2 = np.array(result)
-    df = pd.DataFrame(data=result2, columns=get_saved_name())
-    df.to_csv(os.path.join(file_folder, filename_time + '-fitresults.csv'), index=False)
+
+
+
+
+
+
+
+# ### main to get localization information
+# Gdata, folder = localize(path_folder, settings)
+# image_localization = Gdata.image
+# plt.figure()
+# plt.imshow(image_localization, cmap='gray', vmin=0, vmax=255)
+# cv2.imwrite(os.path.abspath(path_folder) + '/output.png', image_localization)
+
+# ##  initialize fitting parameters
+# x, y, aoi, bead_number, initial_guess, parameters, N = preparefit_info(read_mode)
+
+# ##  start multi-processing using .map()
+# t1 = time.time()
+# if __name__ == '__main__':
+#     result = []
+#     p0 = np.array(parameters)
+#     for i in range(N):
+#         image = Gdata.readGlimpse1(i)
+#         data, parameters = trackbead2(image, i+1, p0)
+#         p0 = update_p0(p0, parameters, i+1)
+#         result += data
+#         print(f'frame {i+1}')
+#     result2 = np.array(result)
+#     df = pd.DataFrame(data=result2, columns=get_saved_name())
+#     df.to_csv(os.path.join(file_folder, filename_time + '-fitresults.csv'), index=False)
 
     
     
     
     
-    # fit_all_frame_single(Gdata, N)
-    # bead_namexy = getcsvinfo(len(Gdata.cX))
-    # result = []
-    # with open(file_folder+'/'+filename_time+'-xy and sigma xy.csv', 'w', newline='') as csvfile:
-    #     writer = csv.writer(csvfile)
-    #     writer.writerow(bead_namexy)
-    #     for i in range(N):
-    #         image = Gdata.readGlimpse1(i)
-    #         data = trackbead(image)
-    #         data = np.array(data)
-    #         print(f'save {i}')
-    #         writer.writerow(list(data[:,1]) + list(data[:,2]) + list(data[:,3]) + list(data[:,4]) + list(data[:,7]))
+#     # fit_all_frame_single(Gdata, N)
+#     # bead_namexy = getcsvinfo(len(Gdata.cX))
+#     # result = []
+#     # with open(file_folder+'/'+filename_time+'-xy and sigma xy.csv', 'w', newline='') as csvfile:
+#     #     writer = csv.writer(csvfile)
+#     #     writer.writerow(bead_namexy)
+#     #     for i in range(N):
+#     #         image = Gdata.readGlimpse1(i)
+#     #         data = trackbead(image)
+#     #         data = np.array(data)
+#     #         print(f'save {i}')
+#     #         writer.writerow(list(data[:,1]) + list(data[:,2]) + list(data[:,3]) + list(data[:,4]) + list(data[:,7]))
 
 
-    #data = fit_mode(Gdata, frame_start=0, N=N)
-    #result, r = fit_all_frame(Gdata, frame_start=0, N = N, size_tofit = size_tofit)
-time_spent = time.time() - t1
-print('spent ' + str(time_spent) + ' s')
+#     #data = fit_mode(Gdata, frame_start=0, N=N)
+#     #result, r = fit_all_frame(Gdata, frame_start=0, N = N, size_tofit = size_tofit)
+# time_spent = time.time() - t1
+# print('spent ' + str(time_spent) + ' s')
 
 
