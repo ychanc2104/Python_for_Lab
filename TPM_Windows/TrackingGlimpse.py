@@ -14,12 +14,12 @@ Read one image of glimpse file
 ### setting parameters
 path_folder = r'F:\YCC\20210205\1-555bp\1-200ms-440uM_BME_gain20'
 
-size_tofit = 10
+# size_tofit = 10
 read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile 
 frame_setread_num = 300 # only useful when mode = 0, can't exceed frame number of a file
 
-fit_mode = 'multiprocessing' #'multiprocessing'
-path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
+# fit_mode = 'multiprocessing' #'multiprocessing'
+# path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
 
 criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
@@ -30,7 +30,7 @@ low = 50
 high = 150
 blacklevel = 30
 ### preparing input parameters
-settings = [criteria_dist, aoi_size, frame_read_forcenter, N_loc, contrast, low, high, blacklevel]
+# settings = [criteria_dist, aoi_size, frame_read_forcenter, N_loc, contrast, low, high, blacklevel]
 ### import used modules first
 import scipy.optimize as opt
 import math
@@ -56,11 +56,11 @@ import pandas as pd
 # fps = 100
 today = datetime.datetime.now()
 filename_time = str(today.year)+str(today.month)+str(today.day)
-if path_mode == 'm':
-    # file_folder = input('type your folder path ')
-    file_folder = path_folder
-else:
-    file_folder = os.getcwd()
+# if path_mode == 'm':
+#     # file_folder = input('type your folder path ')
+#     file_folder = path_folder
+# else:
+#     file_folder = os.getcwd()
 
 
 ### define a class for image info. e.g. path, header...
@@ -135,9 +135,10 @@ class Header:
 
 ### define a class for all glimpse data
 class BinaryImage:
-    def __init__(self, path_folder, criteria_dist = 10, aoi_size = 20, frame_read_forcenter = 0, 
-                 N_loc = 20, contrast = 10, low = 50, high = 150, blacklevel = 50):
-        ##  info: [[header], [frame_per_file], [path_data], data_type, size_a_image]
+    def __init__(self, path_folder, read_mode = 0, frame_setread_num = 10, 
+                 criteria_dist = 10, aoi_size = 20, frame_read_forcenter = 0,
+                 N_loc = 20, contrast = 10, low = 50, high = 150,
+                  blacklevel = 50):
         self.path_folder = os.path.abspath(path_folder)
         self.path_header = os.path.join(path_folder, 'header.glimpse')
         self.path_header_utf8 = self.path_header.encode('utf8')
@@ -155,24 +156,25 @@ class BinaryImage:
         self.blacklevel = blacklevel
         self.offset, self.fileNumber = self.getoffset()
         
-        
         self.read1 = [] # one image at i
         self.readN = [] # N image from i
-
-        # self.offset = []
-        # self.fileNumber = []
         # self.contours = []
         # self.edges = []
+        self.image = [] # image used to process
         self.cX = []
         self.cY = []
         self.perimeters = []
         self.areas = []
         self.radius_save = []
-        self.image = [] # image used to process
         # self.intensity = []
         # self.image_cut = []
         # self.AOIimage = []
-        
+        self.x_fit = []
+        self.y_fit = []
+        self.bead_number = 0
+        self.initial_guess = []
+        self.parameters = []
+        self.N = 0
         
     def localize(self):
         print('start centering')
@@ -184,11 +186,94 @@ class BinaryImage:
         cX, cY = self.removeXY(cX, cY, self.criteria_dist)
         intensity = self.getintensity(image, cX, cY, self.aoi_size)
         cX, cY = self.removeblack(cX, cY, intensity, blacklevel)
+        self.cX = cX
+        self.cY = cY
+        bead_number = len(cX)
         image = self.drawAOI(image, cX, cY, self.aoi_size)
+        self.show_grayimage(image, save = True)
+        self.x_fit, self.y_fit, self.bead_number, self.initial_guess, self.parameters, self.N = self.preparefit_info(
+            read_mode, frame_setread_num, self.frames_acquired, bead_number, aoi_size)
         print('finish centering')
         return image, cX, cY
-    
 
+            
+    ### methods for tracking beads
+    ## get image-cut of certain AOI
+    def getAOI(self, image, row, col, aoi_size=20):
+        row = int(row) # cY, height
+        col = int(col)   # cX, width
+        size_half = int(aoi_size/2)
+        image_cut = image[row-size_half:(row+size_half), col-size_half:(col+size_half)]
+        intensity = np.sum(image_cut)
+        return image_cut, intensity
+    
+    ## get sum of squared residuals
+    def get_residuals(self, fn, x, y, image, popt):
+        residuals = image.ravel() - fn((x, y), *popt)
+        ss_res = np.sum(residuals**2)
+        return ss_res
+        
+    ## get bounds for curve_fit
+    def get_bounds(self, aoi_size=20):
+        #(amplitude, sigma_x, sigma_y, xo, yo, theta_rad, offset)
+        bounds=((0, 0, 0, 0, 0, 0, -255), (255, aoi_size, aoi_size, aoi_size-1, aoi_size-1, 180, 255))
+        return bounds
+    
+    ## get parameters for trackbead fitting
+    def preparefit_info(self, read_mode, frame_setread_num, frame_total, bead_number, aoi_size = 20): 
+        x_fit = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
+        y_fit = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
+        initial_guess = [40,3,3,11,11,0,10]
+        parameters = [initial_guess] * bead_number
+        if read_mode == 0:
+            N = frame_setread_num
+        else:
+            N = frame_total
+        return x_fit, y_fit, bead_number, initial_guess, parameters, N
+    
+    def update_p0(self, p0_i, p0_f, i): #p0 is n by m matrix, n is bead number and m is 7, i=1,2,3,...
+        p0 = (p0_i * i + p0_f)/(i+1)
+        return p0
+       
+    ##  tracking bead position in a image, get all parameters and frame number
+    def trackbead(self, image, cX, cY, aoi_size, frame, p0):
+        para_fit = []
+        bounds = self.get_bounds(aoi_size)
+        x = self.x_fit
+        y = self.y_fit
+        parameters = self.parameters
+        for j in range(self.bead_number):
+            image_tofit, intensity = self.getAOI(image, cY[j], cX[j], aoi_size)
+            ## enhance contrast
+            # image_bead = image[horizontal-10:(horizontal+10), vertical-10:(vertical+10)] # [x,y] = [width, height]
+            # image_bead_bur = cv2.GaussianBlur(image_bead, (5, 5),2,2)
+            ## increase contrast
+            # enh_con = ImageEnhance.Contrast(Image.fromarray(image_bead_bur))
+            # contrast = 10
+            # image_contrasted = enh_con.enhance(contrast)
+            # image_tofit = np.array(image_contrasted)
+            try:
+                popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), p0[j], bounds=bounds)
+                ss_res = self.get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
+                # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
+                # data_fitted = twoD_Gaussian((x, y), *popt)
+                intensity_integral = 2*math.pi*popt[0]*popt[1]*popt[2]
+                para_fit += [
+                    [frame] + [j+1] + list(popt) + 
+                    [intensity] + [intensity_integral] + [ss_res]
+                             ]
+                parameters[j] = list(popt)
+                
+            except RuntimeError:
+                # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), initial_guess)
+                para_fit += [[frame] + [j+1]+[0,0,0,0,0,0,0,0,0,0]]
+                parameters[j] = self.initial_guess # initial guess for all beads
+            except:
+                para_fit += [[frame] + [j+1]+[0,0,0,0,0,0,0,0,0,0]]
+                parameters[j] = self.initial_guess
+        return para_fit, np.array(parameters)
+    
+    ### Get header information
     def getheader(self):
         if platform == 'win32':
             mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
@@ -243,7 +328,6 @@ class BinaryImage:
         self.frame_total = sum(self.frame_per_file) # cal frame number of this file
         info = [self.frame_per_file, self.path_data, self.data_type, self.size_a_image]
         return info
-
 
     ##  get offset array
     def getoffset(self):
@@ -394,9 +478,10 @@ class BinaryImage:
         plt.imshow(image, cmap='gray', vmin=0, vmax=255)
         if save == True:
             cv2.imwrite(os.path.join(self.path_folder, 'output.png'), image)
+            
+    
 
-
-##  2-D Gaussian function with rotation angle
+###  2-D Gaussian function with rotation angle
 def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
     xo = float(xo)
     yo = float(yo)
@@ -408,393 +493,154 @@ def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
     c = (np.sin(theta)**2)/(2*sigma_x**2) + (np.cos(theta)**2)/(2*sigma_y**2)
     g = offset + amplitude*np.exp( - (a*((x-xo)**2) + 2*b*(x-xo)*(y-yo) 
                                     + c*((y-yo)**2)) )
-    return g.ravel()
+    return g.ravel()  
 
-
-# class Ganalyze:
-#     def __init__(self, path_folder, settings):
-#         self.size_tofit, ,self.read_mode, self.frame_setread_num, self.criteria_dist, self.aoi_size, self.frame_read_forcenter, self.N, self.contrast, self.low, self.high, self.blacklevel = settings
-#         self.Header = Header(path_folder)
-#         self.Gdata = []
-#         self.aoi = []
-#         self.parameters = []
-#         self.N = [] #total frames to fit
-#         self.x = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-#         self.y = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-      
-#         def localize(self):
-#         # self.Header = Header(path_folder)
-#         print('start centering')
-#         self.Header.getheader()
-#         info = self.Header.getdatainfo()
-        
-#         self.Gdata = Gimage(info, self.criteria_dist, self.aoi_size)
-#         self.Gdata.getoffset()
-#         imageN = self.Gdata.readGlimpseN(frame_read_forcenter, N)
-#         image = self.Gdata.stackimageN(imageN)
-#         self.Gdata.loadimage(image)
-#         self.Gdata.contrast(contrast)
-#         self.Gdata.getContour(low, high)
-#         self.Gdata.getXY()
-#         self.Gdata.removeXY()    
-#         self.Gdata.getintensity(aoisize=self.aoi_size)
-#         self.Gdata.removeblack(blacklevel)
-#         self.Gdata.drawAOI()
-#         print('finish centering')
-        
-#      ### get parameters for trackbead fitting
-#     def get_fit_info(self): 
-#         self.x = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-#         self.y = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-#         self.aoi = [self.Gdata.cX, self.Gdata.cY]
-#         bead_number = len(aoi[0])
-#         initial_guess = [40,3,3,11,11,0,10]
-#         self.parameters = [initial_guess] * bead_number
-#         if self.read_mode == 0:
-#             self.N = frame_setread_num
-#         else:
-#             self.N = self.Header.frame_total
-#         return x, y, aoi, bead_number, initial_guess, parameters, N       
-        
-
-    
-
-    
-#     def getAOI(image, row, col, aoi_size=20):
-#         row = int(row) # cY, height
-#         col = int(col)   # cX, width
-#         size_half = int(aoi_size/2)
-#         image_cut = image[row-size_half:(row+size_half), col-size_half:(col+size_half)]
-#         intensity = np.sum(image_cut)
-#         return image_cut, intensity
-    
-
-
-### define main() for localize all beads in a frame
-def localize(path_folder, settings = [5,20,0,10,10,30,90,230]): # four steps, getContour => getXY => removeXY => plotXY
-    ### get parameters, settings = [criteria_dist, aoi_size, frame_read_forcenter, N, contrast, low, high, blacklevel]
-    criteria_dist, aoi_size, frame_read_forcenter, N, contrast, low, high, blacklevel = settings
-    
-    ### pick one image to localize bead position
-    print('opening file...')
-    # with open(file_name[0], 'rb') as f:
-    folder = Header(path_folder)
-    folder.getheader()
-    folder.getdatainfo()
-    info = folder.info
-    Gdata = Gimage(info, criteria_dist, aoi_size)
-    Gdata.getoffset()
-    imageN = Gdata.readGlimpseN(frame_read_forcenter, N)
-    image = Gdata.stackimageN(imageN)
-    Gdata.loadimage(image)
-    print('start centering')
-    
-    Gdata.contrast(contrast)
-    Gdata.getContour(low, high)
-    Gdata.getXY()
-    Gdata.removeXY()    
-    Gdata.getintensity(aoisize=aoi_size)
-    Gdata.removeblack(blacklevel)
-    Gdata.drawAOI()
-    print('finish centering')
-    return Gdata, folder
-
-
-### get image-cut of certain AOI
-def getAOI(image, row, col, aoi_size=20):
-    row = int(row) # cY, height
-    col = int(col)   # cX, width
-    size_half = int(aoi_size/2)
-    image_cut = image[row-size_half:(row+size_half), col-size_half:(col+size_half)]
-    intensity = np.sum(image_cut)
-    return image_cut, intensity
-
-### get sum of squared residuals
-def get_residuals(fn, x, y, image, popt):
-    residuals = image.ravel() - fn((x, y), *popt)
-    ss_res = np.sum(residuals**2)
-    return ss_res
-    
-### get bounds for curve_fit
-def get_bounds(aoi_size=20):
-    #(amplitude, sigma_x, sigma_y, xo, yo, theta_rad, offset)
-    bounds=((0, 0, 0, 0, 0, 0, -255), (255, aoi_size, aoi_size, aoi_size-1, aoi_size-1, math.pi/2, 255))
-    return bounds
-
-
-###  tracking bead position in a image, get center and std of X,Y using Gaussian fit
-def trackbead(image):  
-    xc = []
-    yc = []
-    sx = []
-    sy = []
-    para_fit = []
-    bounds = get_bounds(aoi_size)
-    for j in range(bead_number):
-        image_tofit, intensity = getAOI(image, aoi[1][j], aoi[0][j])
-        ## enhance contrast
-        # image_bead = image[horizontal-10:(horizontal+10), vertical-10:(vertical+10)] # [x,y] = [width, height]
-        # image_bead_bur = cv2.GaussianBlur(image_bead, (5, 5),2,2)
-        ## increase contrast
-        # enh_con = ImageEnhance.Contrast(Image.fromarray(image_bead_bur))
-        # contrast = 10
-        # image_contrasted = enh_con.enhance(contrast)
-        # image_tofit = np.array(image_contrasted)
-        popt=[]
-        pcov=[]
-        try:
-            popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), parameters[j], bounds=bounds)
-            ss_res = get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
-            # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
-            # data_fitted = twoD_Gaussian((x, y), *popt)
-            xc += [popt[1]] # x position of each frame
-            yc += [popt[2]] #
-            sx += [popt[3]]
-            sy += [popt[4]]
-            para_fit += [[j+1] + list(popt) + [intensity] + [ss_res]]
-            parameters[j] = list(popt)
-            
-        except RuntimeError:
-            # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), initial_guess)
-            xc += [0] # x position of each frame
-            yc += [0] #  
-            sx += [0]
-            sy += [0]
-            para_fit += [[j+1]+[0,0,0,0,0,0,0,0,0]]
-            parameters[j] = [initial_guess] # initial guess for all beads
-        except:
-            para_fit += [[j+1]+[0,0,0,0,0,0,0,0,0]]
-
-    # return [xc, yc, sx, sy, para_fit]
-    return para_fit
-
-###  tracking bead position in a image, get all parameters and frame number
-def trackbead2(image, frame, p0):
-    para_fit = []
-    bounds = get_bounds(aoi_size)
-    for j in range(bead_number):
-        image_tofit, intensity = getAOI(image, aoi[1][j], aoi[0][j])
-        ## enhance contrast
-        # image_bead = image[horizontal-10:(horizontal+10), vertical-10:(vertical+10)] # [x,y] = [width, height]
-        # image_bead_bur = cv2.GaussianBlur(image_bead, (5, 5),2,2)
-        ## increase contrast
-        # enh_con = ImageEnhance.Contrast(Image.fromarray(image_bead_bur))
-        # contrast = 10
-        # image_contrasted = enh_con.enhance(contrast)
-        # image_tofit = np.array(image_contrasted)
-        try:
-            popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), p0[j], bounds=bounds)
-            ss_res = get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
-            # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
-            # data_fitted = twoD_Gaussian((x, y), *popt)
-            para_fit += [[frame] + [j+1] + list(popt) + [intensity] + [ss_res]]
-            parameters[j] = list(popt)
-            
-        except RuntimeError:
-            # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), initial_guess)
-            para_fit += [[frame] + [j+1]+[0,0,0,0,0,0,0,0,0]]
-            parameters[j] = initial_guess # initial guess for all beads
-        except:
-            para_fit += [[frame] + [j+1]+[0,0,0,0,0,0,0,0,0]]
-            parameters[j] = initial_guess
-
-    return para_fit, np.array(parameters)
-
-
-### get parameters for trackbead fitting
-def preparefit_info(read_mode, aoi_size = 20): 
-    x = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-    y = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-    aoi = [Gdata.cX, Gdata.cY]
-    bead_number = len(aoi[0])
-    initial_guess = [40,3,3,11,11,0,10]
-    parameters = [initial_guess] * bead_number
-    if read_mode == 0:
-        N = frame_setread_num
-    else:
-        N = folder.frame_total
-    
-    return x, y, aoi, bead_number, initial_guess, parameters, N
-
-def update_p0(p0_i, p0_f, i): #p0 is n by m matrix, n is bead number and m is 7, i=1,2,3,...
-    p0 = (p0_i * i + p0_f)/(i+1)
-    return p0
-
-
-### get parameters for each fitting loop
-def getloop_info(frame_start, frame_total, size_tofit):
-
-    frame_i = []
-    N = []
-    i_run = np.ceil(frame_total/size_tofit).astype(int)
-    for i in range(i_run):
-        frame_i += [ min((i)*size_tofit, frame_total) ]
-        if frame_total>(i+1)*size_tofit:
-            N += [size_tofit]
-        else:
-            N += [frame_total-(i)*size_tofit]
-    return frame_i, N # frame_i: frame_start for each loop, N: size to fit for each loop
-
-### get csv writting info
-def getcsvinfo(bead_number):
-    bead_namex = []
-    bead_namey = []
-    bead_namesx = []
-    bead_namesy = []
-    bead_nameI = []
-    ##   create csv file to store xy position data
-    for i in range(bead_number):
-        bead_namex += ['beadx '+str(i+1)]
-        bead_namey += ['beady '+str(i+1)]
-        bead_namesx += ['stdx '+str(i+1)]
-        bead_namesy += ['stdy '+str(i+1)]
-        bead_nameI += ['intensity '+str(i+1)]
-
-    bead_namexy = bead_namex + bead_namey + bead_namesx + bead_namesy + bead_nameI
-    return bead_namexy
-
-### information for multi-threading
-def print_start(frame_i, frame_f):
-    print('start analyzing ' + 'frame: ' + str(frame_i) + ' to ' + str(frame_f) )
-
-def print_finish(frame_i, frame_f, frame_total):
-    print('finish analyzing ' + 'frame: ' + str(frame_i) + ' to ' + str(frame_f) + ', progress: ' +
-                          str(int(100*frame_f/frame_total)) + '%')
-
-### not finishing for choosing multi or single core
-def fit_mode(Gdata, frame_start, N):
-    ##  open .csv to be saved
-    frame_i, frame_tofit = getloop_info(frame_start, N, size_tofit)
-    bead_namexy = getcsvinfo(len(Gdata.cX))
-    result = []
-    with open(file_folder+'/'+filename_time+'-xy and sigma xy.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(bead_namexy)
-        for i in range(N):
-            image = Gdata.readGlimpse1(i)
-            data = trackbead(image)
-            data = np.array(data)
-            print(f'save {i}')
-            writer.writerow(list(data[:,1]) + list(data[:,2]) + list(data[:,3]) + list(data[:,4]) + list(data[:,7]))
-    return data
-    
-### not finishing for choosing multi or single core
-def fit_all_frame_single(Gdata, N):
-    ##  open .csv to be saved
-    bead_namexy = getcsvinfo(len(Gdata.cX))
-    with open(file_folder+'/'+filename_time+'-xy and sigma xy.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(bead_namexy)
-        for i in range(N):
-            image = Gdata.readGlimpse1(i)
-            data = trackbead(image)
-            data = np.array(data)
-            print(f'save {i}')
-            writer.writerow(list(data[:,1]) + list(data[:,2]) + list(data[:,3]) + list(data[:,4]) + list(data[:,7]))
-
-
-
-
-
-
-
-### main to tracking each beads over each frame
-def fit_all_frame(Gdata, frame_start, N, size_tofit):
-    frame_i, frame_tofit = getloop_info(frame_start, N, size_tofit)
-    bead_namexy = getcsvinfo(len(Gdata.cX))
-    result = []
-    ##  open .csv to be saved
-    with open(file_folder+'/'+filename_time+'-xy and sigma xy.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(bead_namexy)
-        for i, n in zip(frame_i, frame_tofit):
-            image_eachframe = Gdata.readGlimpseN(i, n)
-            print_start(i, i+n)
-            # r = fit_mode(image_eachframe, fit_mode = fit_mode)
-            # result.append(r)
-            with mp.Pool(mp.cpu_count()-4) as pool:
-                #freeze_support()
-                r = pool.map(trackbead, image_eachframe)
-                #pool.close()
-                #pool.join()
-                result += r
-                if len(result) == N:
-                    data = np.array(result)
-                    for k in range(len(result)): # number of frame
-                    ##  save x,y,sx,sy 
-                        writer.writerow(list(data[k][:,1]) + list(data[k][:,2]) + list(data[k][:,3]) + list(data[k][:,4]) + list(data[k][:,7]))
-                    print_finish(i, i+n, N)
-                    print('saving...')
-                else:
-                    print_finish(i, i+n, N)
-    return result, r
-
-
+###
 def get_saved_name():
-    return ['frame', 'aoi', 'amplitude', 'sx', 'sy', 'x', 'y', 'theta_rad', 'offset', 'intensity', 'ss_res']
+    return ['frame', 'aoi', 'amplitude', 'sx', 'sy', 'x', 'y', 'theta_deg', 'offset', 'intensity', 'intensity_integral', 'ss_res']
 
 
+# ###  tracking bead position in a image, get center and std of X,Y using Gaussian fit
+# def trackbead(image):  
+#     xc = []
+#     yc = []
+#     sx = []
+#     sy = []
+#     para_fit = []
+#     bounds = get_bounds(aoi_size)
+#     for j in range(bead_number):
+#         image_tofit, intensity = getAOI(image, aoi[1][j], aoi[0][j])
+#         ## enhance contrast
+#         # image_bead = image[horizontal-10:(horizontal+10), vertical-10:(vertical+10)] # [x,y] = [width, height]
+#         # image_bead_bur = cv2.GaussianBlur(image_bead, (5, 5),2,2)
+#         ## increase contrast
+#         # enh_con = ImageEnhance.Contrast(Image.fromarray(image_bead_bur))
+#         # contrast = 10
+#         # image_contrasted = enh_con.enhance(contrast)
+#         # image_tofit = np.array(image_contrasted)
+#         popt=[]
+#         pcov=[]
+#         try:
+#             popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), parameters[j], bounds=bounds)
+#             ss_res = get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
+#             # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
+#             # data_fitted = twoD_Gaussian((x, y), *popt)
+#             xc += [popt[1]] # x position of each frame
+#             yc += [popt[2]] #
+#             sx += [popt[3]]
+#             sy += [popt[4]]
+#             para_fit += [[j+1] + list(popt) + [intensity] + [ss_res]]
+#             parameters[j] = list(popt)
+            
+#         except RuntimeError:
+#             # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), initial_guess)
+#             xc += [0] # x position of each frame
+#             yc += [0] #  
+#             sx += [0]
+#             sy += [0]
+#             para_fit += [[j+1]+[0,0,0,0,0,0,0,0,0]]
+#             parameters[j] = [initial_guess] # initial guess for all beads
+#         except:
+#             para_fit += [[j+1]+[0,0,0,0,0,0,0,0,0]]
 
-Gdata = BinaryImage(path_folder, criteria_dist = criteria_dist, aoi_size = aoi_size,
-                    frame_read_forcenter = frame_read_forcenter, N_loc = N_loc,
-                    contrast = contrast, low = low, high = high, blacklevel = blacklevel)
-image, cX, cY = Gdata.localize()
-Gdata.show_grayimage(image, save = True)
+#     # return [xc, yc, sx, sy, para_fit]
+#     return para_fit
 
 
+# ### get parameters for each fitting loop
+# def getloop_info(frame_start, frame_total, size_tofit):
+
+#     frame_i = []
+#     N = []
+#     i_run = np.ceil(frame_total/size_tofit).astype(int)
+#     for i in range(i_run):
+#         frame_i += [ min((i)*size_tofit, frame_total) ]
+#         if frame_total>(i+1)*size_tofit:
+#             N += [size_tofit]
+#         else:
+#             N += [frame_total-(i)*size_tofit]
+#     return frame_i, N # frame_i: frame_start for each loop, N: size to fit for each loop
+
+# ### get csv writting info
+# def getcsvinfo(bead_number):
+#     bead_namex = []
+#     bead_namey = []
+#     bead_namesx = []
+#     bead_namesy = []
+#     bead_nameI = []
+#     ##   create csv file to store xy position data
+#     for i in range(bead_number):
+#         bead_namex += ['beadx '+str(i+1)]
+#         bead_namey += ['beady '+str(i+1)]
+#         bead_namesx += ['stdx '+str(i+1)]
+#         bead_namesy += ['stdy '+str(i+1)]
+#         bead_nameI += ['intensity '+str(i+1)]
+
+#     bead_namexy = bead_namex + bead_namey + bead_namesx + bead_namesy + bead_nameI
+#     return bead_namexy
+
+# ### information for multi-threading
+# def print_start(frame_i, frame_f):
+#     print('start analyzing ' + 'frame: ' + str(frame_i) + ' to ' + str(frame_f) )
+
+# def print_finish(frame_i, frame_f, frame_total):
+#     print('finish analyzing ' + 'frame: ' + str(frame_i) + ' to ' + str(frame_f) + ', progress: ' +
+#                           str(int(100*frame_f/frame_total)) + '%')
 
 
-
-
-
-
-
-# ### main to get localization information
-# Gdata, folder = localize(path_folder, settings)
-# image_localization = Gdata.image
-# plt.figure()
-# plt.imshow(image_localization, cmap='gray', vmin=0, vmax=255)
-# cv2.imwrite(os.path.abspath(path_folder) + '/output.png', image_localization)
-
-# ##  initialize fitting parameters
-# x, y, aoi, bead_number, initial_guess, parameters, N = preparefit_info(read_mode)
-
-# ##  start multi-processing using .map()
-# t1 = time.time()
-# if __name__ == '__main__':
+# ### main to tracking each beads over each frame
+# def fit_all_frame(Gdata, frame_start, N, size_tofit):
+#     frame_i, frame_tofit = getloop_info(frame_start, N, size_tofit)
+#     bead_namexy = getcsvinfo(len(Gdata.cX))
 #     result = []
-#     p0 = np.array(parameters)
-#     for i in range(N):
-#         image = Gdata.readGlimpse1(i)
-#         data, parameters = trackbead2(image, i+1, p0)
-#         p0 = update_p0(p0, parameters, i+1)
-#         result += data
-#         print(f'frame {i+1}')
-#     result2 = np.array(result)
-#     df = pd.DataFrame(data=result2, columns=get_saved_name())
-#     df.to_csv(os.path.join(file_folder, filename_time + '-fitresults.csv'), index=False)
-
-    
-    
-    
-    
-#     # fit_all_frame_single(Gdata, N)
-#     # bead_namexy = getcsvinfo(len(Gdata.cX))
-#     # result = []
-#     # with open(file_folder+'/'+filename_time+'-xy and sigma xy.csv', 'w', newline='') as csvfile:
-#     #     writer = csv.writer(csvfile)
-#     #     writer.writerow(bead_namexy)
-#     #     for i in range(N):
-#     #         image = Gdata.readGlimpse1(i)
-#     #         data = trackbead(image)
-#     #         data = np.array(data)
-#     #         print(f'save {i}')
-#     #         writer.writerow(list(data[:,1]) + list(data[:,2]) + list(data[:,3]) + list(data[:,4]) + list(data[:,7]))
+#     ##  open .csv to be saved
+#     with open(file_folder+'/'+filename_time+'-xy and sigma xy.csv', 'w', newline='') as csvfile:
+#         writer = csv.writer(csvfile)
+#         writer.writerow(bead_namexy)
+#         for i, n in zip(frame_i, frame_tofit):
+#             image_eachframe = Gdata.readGlimpseN(i, n)
+#             print_start(i, i+n)
+#             # r = fit_mode(image_eachframe, fit_mode = fit_mode)
+#             # result.append(r)
+#             with mp.Pool(mp.cpu_count()-4) as pool:
+#                 #freeze_support()
+#                 r = pool.map(trackbead, image_eachframe)
+#                 #pool.close()
+#                 #pool.join()
+#                 result += r
+#                 if len(result) == N:
+#                     data = np.array(result)
+#                     for k in range(len(result)): # number of frame
+#                     ##  save x,y,sx,sy 
+#                         writer.writerow(list(data[k][:,1]) + list(data[k][:,2]) + list(data[k][:,3]) + list(data[k][:,4]) + list(data[k][:,7]))
+#                     print_finish(i, i+n, N)
+#                     print('saving...')
+#                 else:
+#                     print_finish(i, i+n, N)
+#     return result, r
 
 
-#     #data = fit_mode(Gdata, frame_start=0, N=N)
-#     #result, r = fit_all_frame(Gdata, frame_start=0, N = N, size_tofit = size_tofit)
-# time_spent = time.time() - t1
-# print('spent ' + str(time_spent) + ' s')
+if __name__ == "__main__":
+    t1 = time.time()
+    Glimpse_data = BinaryImage(path_folder, criteria_dist = criteria_dist, aoi_size = aoi_size,
+                        frame_read_forcenter = frame_read_forcenter, N_loc = N_loc,
+                        contrast = contrast, low = low, high = high, blacklevel = blacklevel)
+    image, cX, cY = Glimpse_data.localize()
+    p0 = np.array(Glimpse_data.parameters)
+    result = []
+    for i in range(Glimpse_data.N):
+        image = Glimpse_data.readGlimpse1(i)
+        data, parameters = Glimpse_data.trackbead(image, cX, cY, aoi_size, i+1, p0)
+        p0 = Glimpse_data.update_p0(p0, parameters, i+1)
+        result += data
+        print(f'frame {i+1}')
+    result_saved = np.array(result)
+    df = pd.DataFrame(data=result_saved, columns=get_saved_name())
+    df.to_csv(os.path.join(path_folder, filename_time + '-fitresults.csv'), index=False)
+    time_spent = time.time() - t1
+    print('spent ' + str(time_spent) + ' s')
+
+
+
 
 
