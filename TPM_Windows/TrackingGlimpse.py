@@ -12,11 +12,13 @@ Read one image of glimpse file
 """
 
 ### setting parameters
-path_folder = r'F:\YCC\20210205\1-555bp\1-200ms-440uM_BME_gain20'
+path_folder = r'F:\YCC\20210205\4-1895bp\1-200ms-440uM_BME_gain20'
+
+
 
 # size_tofit = 10
-read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile 
-frame_setread_num = 300 # only useful when mode = 0, can't exceed frame number of a file
+read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile 
+frame_setread_num = 0 # only useful when mode = 0, can't exceed frame number of a file
 
 # fit_mode = 'multiprocessing' #'multiprocessing'
 # path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
@@ -24,11 +26,11 @@ frame_setread_num = 300 # only useful when mode = 0, can't exceed frame number o
 criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
 frame_read_forcenter = 0 # no need to change, frame to autocenter beads
-N_loc = 10
-contrast = 15
-low = 50
-high = 150
-blacklevel = 30
+N_loc = 40 # number of frame to stack and localization
+contrast = 11
+low = 40
+high = 120
+blacklevel = 40
 ### preparing input parameters
 # settings = [criteria_dist, aoi_size, frame_read_forcenter, N_loc, contrast, low, high, blacklevel]
 ### import used modules first
@@ -61,77 +63,6 @@ filename_time = str(today.year)+str(today.month)+str(today.day)
 #     file_folder = path_folder
 # else:
 #     file_folder = os.getcwd()
-
-
-### define a class for image info. e.g. path, header...
-class Header:
-    def __init__(self, path_folder):
-        self.path_folder = os.path.abspath(path_folder)
-        self.path_header = os.path.join(path_folder, 'header.glimpse')
-        self.path_header_utf8 = self.path_header.encode('utf8')
-        self.path_data = [x for x in sorted(glob(self.path_folder + '/*.glimpse')) if x != self.path_header ]
-        self.header = []
-        ### get file info.
-        self.size_a_image = 0  # 8bit format default
-        self.data_type = ''
-        self.file_size = [] 
-        self.frame_per_file = []
-        self.frame_total = 0 # cal frame number of this file
-        self.info = []
-    def getheader(self):
-        mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
-        GetHeader = mydll.ReadHeader  # function name is ReadHeader
-        # assign variable first (from LabVIEW)
-        # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber, 
-        # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (avg. fps (Hz)),uint32_t *Element0OfTTB, 
-        # int32_t *RegionHeight, int32_t *RegionWidth, 
-        # uint32_t *FramesAcquired)
-        # ignore array datatype in header.glimpse
-        GetHeader.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint),
-                      ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint),
-                      ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
-                      ctypes.POINTER(ctypes.c_uint))
-        offset = ctypes.c_int(1)
-        fileNumber = ctypes.c_uint(1)
-        PixelDepth = ctypes.c_uint(1)
-        Element0OfTTB = ctypes.c_uint(1)    
-        timeOf1stFrameSecSince1104 = ctypes.c_double(1)
-        RegionHeight = ctypes.c_int(1)
-        RegionWidth = ctypes.c_int(1)
-        FramesAcquired = ctypes.c_uint(1)
-        
-        GetHeader(self.path_header_utf8, offset, fileNumber, 
-                  PixelDepth, timeOf1stFrameSecSince1104, Element0OfTTB, 
-                  RegionHeight, RegionWidth, 
-                  FramesAcquired) # There are 8 variables.
-        self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value, 
-            PixelDepth.value, offset.value, fileNumber.value, 
-            Element0OfTTB.value, timeOf1stFrameSecSince1104.value]
-        return self.header
-        
-    def getheader_txt(self):
-        df = pd.read_csv(self.path_header_txt, sep='\t', header=None)
-        header_names = df[0].to_numpy()
-        header_values = df[1].to_numpy()
-        self.header = [int(header_values[0]), int(header_values[2]), int(header_values[1]), int(header_values[4]), header_values[3]]
-        # frames, height, width, pixeldepth, avg fps
-        return self.header
-    
-    def getdatainfo(self):       
-        ### get file info.
-        if self.header[3] == 0: # 8 bit integer
-            self.data_type = 'B'
-            pixel_depth = 1
-        else:
-            self.data_type = 'h'
-            pixel_depth = 2
-        self.size_a_image = self.header[1] * self.header[2] * pixel_depth  # 8bit format default
-        self.file_size = [Path(x).stat().st_size for x in self.path_data] 
-        self.frame_per_file = [int(x/self.size_a_image) for x in self.file_size]
-        self.frame_total = sum(self.frame_per_file) # cal frame number of this file
-        self.info = [self.header, self.frame_per_file, self.path_data, self.data_type, self.size_a_image]
-        return self.info
-        
 
 ### define a class for all glimpse data
 class BinaryImage:
@@ -215,8 +146,8 @@ class BinaryImage:
         
     ## get bounds for curve_fit
     def get_bounds(self, aoi_size=20):
-        #(amplitude, sigma_x, sigma_y, xo, yo, theta_rad, offset)
-        bounds=((0, 0, 0, 0, 0, 0, -255), (255, aoi_size, aoi_size, aoi_size-1, aoi_size-1, 180, 255))
+        #(amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset)
+        bounds=((0, 0, 0, 0, 0, 0, 0), (255, aoi_size, aoi_size, aoi_size-1, aoi_size-1, 90, 255))
         return bounds
     
     ## get parameters for trackbead fitting
