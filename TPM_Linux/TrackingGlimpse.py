@@ -12,19 +12,19 @@ Read one image of glimpse file
 """
 
 ### setting parameters
-path_folder = r'C:\Users\hwlab\Desktop\17-550bp-30ms-33fps'
+path_folder = r'/home/hwligroup/Desktop/YCC/20210127/qdot655/3281bp/3/4-200ms-110uM_BME'
 
 size_tofit = 20
 read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile 
-frame_setread_num = 20 # only useful when mode = 0, can't exceed frame number of a file
+frame_setread_num = 100 # only useful when mode = 0, can't exceed frame number of a file
 
 fit_mode = 'multiprocessing' #'multiprocessing'
 path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
 
 criteria_dist = 5 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
-frame_read_forcenter = 2 # no need to change, frame to autocenter beads
-N_loc = 5
+frame_read_forcenter = 0 # no need to change, frame to autocenter beads
+N_loc = 1
 contrast = 10
 low = 40
 high = 120 
@@ -45,6 +45,7 @@ import os
 from glob import glob
 import datetime
 from PIL import Image,ImageEnhance
+import pandas as pd
 from multiprocessing import freeze_support
 import csv
 import time
@@ -68,9 +69,10 @@ else:
 class data_folder:
     def __init__(self, path_folder):
         self.path_folder = os.path.abspath(path_folder)
-        self.path_header = os.path.abspath(path_folder + '\header.glimpse')
+        self.path_header = os.path.join(path_folder, 'header.glimpse')
         self.path_header_utf8 = self.path_header.encode('utf8')
-        self.path_data = [x for x in glob(self.path_folder + '/*.glimpse') if x != self.path_header ]
+        self.path_header_txt = os.path.join(path_folder, 'header.txt')
+        self.path_data = [x for x in sorted(glob(self.path_folder + '/*.glimpse')) if x != self.path_header ]
         self.header = []
         ### get file info.
         self.size_a_image = 0  # 8bit format default
@@ -79,35 +81,42 @@ class data_folder:
         self.frame_per_file = []
         self.frame_total = 0 # cal frame number of this file
         self.info = []
-    def getheader(self):
-        mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
-        GetHeader = mydll.ReadHeader  # function name is ReadHeader
-        # assign variable first (from LabVIEW)
-        # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber, 
-        # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (avg. fps (Hz)),uint32_t *Element0OfTTB, 
-        # int32_t *RegionHeight, int32_t *RegionWidth, 
-        # uint32_t *FramesAcquired)
-        # ignore array datatype in header.glimpse
-        GetHeader.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint),
-                      ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint),
-                      ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
-                      ctypes.POINTER(ctypes.c_uint))
-        offset = ctypes.c_int(1)
-        fileNumber = ctypes.c_uint(1)
-        PixelDepth = ctypes.c_uint(1)
-        Element0OfTTB = ctypes.c_uint(1)    
-        timeOf1stFrameSecSince1104 = ctypes.c_double(1)
-        RegionHeight = ctypes.c_int(1)
-        RegionWidth = ctypes.c_int(1)
-        FramesAcquired = ctypes.c_uint(1)
-        
-        GetHeader(self.path_header_utf8, offset, fileNumber, 
-                  PixelDepth, timeOf1stFrameSecSince1104, Element0OfTTB, 
-                  RegionHeight, RegionWidth, 
-                  FramesAcquired) # There are 8 variables.
-        self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value, 
-            PixelDepth.value, offset.value, fileNumber.value, 
-            Element0OfTTB.value, timeOf1stFrameSecSince1104.value]
+    # def getheader(self):
+    #     mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
+    #     GetHeader = mydll.ReadHeader  # function name is ReadHeader
+    #     # assign variable first (from LabVIEW)
+    #     # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber,
+    #     # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (avg. fps (Hz)),uint32_t *Element0OfTTB,
+    #     # int32_t *RegionHeight, int32_t *RegionWidth,
+    #     # uint32_t *FramesAcquired)
+    #     # ignore array datatype in header.glimpse
+    #     GetHeader.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint),
+    #                   ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_double), ctypes.POINTER(ctypes.c_uint),
+    #                   ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+    #                   ctypes.POINTER(ctypes.c_uint))
+    #     offset = ctypes.c_int(1)
+    #     fileNumber = ctypes.c_uint(1)
+    #     PixelDepth = ctypes.c_uint(1)
+    #     Element0OfTTB = ctypes.c_uint(1)
+    #     timeOf1stFrameSecSince1104 = ctypes.c_double(1)
+    #     RegionHeight = ctypes.c_int(1)
+    #     RegionWidth = ctypes.c_int(1)
+    #     FramesAcquired = ctypes.c_uint(1)
+    #
+    #     GetHeader(self.path_header_utf8, offset, fileNumber,
+    #               PixelDepth, timeOf1stFrameSecSince1104, Element0OfTTB,
+    #               RegionHeight, RegionWidth,
+    #               FramesAcquired) # There are 8 variables.
+    #     self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value,
+    #         PixelDepth.value, offset.value, fileNumber.value,
+    #         Element0OfTTB.value, timeOf1stFrameSecSince1104.value]
+
+    def getheader_txt(self):
+        df = pd.read_csv(self.path_header_txt, sep='\t', header=None)
+        header_names = df[0].to_numpy()
+        header_values = df[1].to_numpy()
+        self.header = [int(header_values[0]), int(header_values[2]), int(header_values[1]), int(header_values[4]), header_values[3]]
+        # frames, height, width, pixeldepth, avg fps
     
     def getdatainfo(self):       
         ### get file info.
@@ -284,9 +293,9 @@ class Gimage:
     def drawAOI(self):
         n = len(self.cX)
         for i in range(n):
-            cv2.circle(self.image, (int(self.cX[i]), int(self.cY[i])), self.AOI_size, (0, 0, 0), 1)
+            cv2.circle(self.image, (int(self.cX[i]), int(self.cY[i])), self.AOI_size, (255, 255, 255), 1)
             cv2.putText(self.image, str(i+1), (int(self.cX[i]+10), int(self.cY[i]+10))
-                        , cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 1, cv2.LINE_AA)
+                        , cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
         return self.image
 
         
@@ -301,7 +310,7 @@ def localize(path_folder, settings = [5,20,0,10,10,30,90,230]): # four steps, ge
     print('opening file...')
     # with open(file_name[0], 'rb') as f:
     folder = data_folder(path_folder)
-    folder.getheader()
+    folder.getheader_txt()
     folder.getdatainfo()
     info = folder.info
     Gdata = Gimage(info, criteria_dist, aoi_size)
@@ -378,7 +387,7 @@ def trackbead(image):
             yc += [0] #  
             sx += [0]
             sy += [0]
-            para_fit += [0,0,0,0,0,0,0]
+            para_fit += [[0,0,0,0,0,0,0]]
             parameters[j] = [initial_guess] # initial guess for all beads
     # return [xc, yc, sx, sy, para_fit]
     return para_fit
@@ -456,6 +465,39 @@ def print_finish(frame_i, frame_f, frame_total):
     
 
 
+# ### main to tracking each beads over each frame
+# def fit_all_frame(Gdata, frame_start, N, size_tofit):
+#     frame_i, frame_tofit = getloop_info(frame_start, N, size_tofit)
+#     bead_namexy = getcsvinfo(len(Gdata.cX))
+#     result = []
+#     ##  open .csv to be saved
+#     with open(file_folder+'/'+filename_time+'-xy and sigma xy.csv', 'w', newline='') as csvfile:
+#         writer = csv.writer(csvfile)
+#         writer.writerow(bead_namexy)
+#         for i, n in zip(frame_i, frame_tofit):
+#             image_eachframe = Gdata.readGlimpseN(i, n)
+#             print_start(i, i+n)
+#             # r = fit_mode(image_eachframe, fit_mode = fit_mode)
+#             # result.append(r)
+#             with mp.Pool(mp.cpu_count()-4) as pool:
+#                 # freeze_support()
+#                 r = pool.map(trackbead, image_eachframe)
+#                 # pool.close()
+#                 # pool.join()
+#                 result += r
+#                 if len(result) == N:
+#                     data = np.array(result)
+#                     for k in range(len(result)): # number of frame
+#                     ##  save x,y,sx,sy
+#
+#                         writer.writerow(list(data[k][:,1]) + list(data[k][:,2]) + list(data[k][:,3]) + list(data[k][:,4]))
+#                     print_finish(i, i+n, N)
+#                     print('saving...')
+#                 else:
+#                     print_finish(i, i+n, N)
+#     return result, r
+
+
 ### main to tracking each beads over each frame
 def fit_all_frame(Gdata, frame_start, N, size_tofit):
     frame_i, frame_tofit = getloop_info(frame_start, N, size_tofit)
@@ -479,15 +521,13 @@ def fit_all_frame(Gdata, frame_start, N, size_tofit):
                 if len(result) == N:
                     data = np.array(result)
                     for k in range(len(result)): # number of frame
-                    ##  save x,y,sx,sy 
+                    ##  save x,y,sx,sy
                         writer.writerow(list(data[k][:,1]) + list(data[k][:,2]) + list(data[k][:,3]) + list(data[k][:,4]))
                     print_finish(i, i+n, N)
                     print('saving...')
                 else:
                     print_finish(i, i+n, N)
     return result, r
-
-
 
 ### main to get localization information
 Gdata, folder = localize(path_folder, settings)
