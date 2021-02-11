@@ -7,7 +7,7 @@ calculate xy-ration and xy BM for given xy position csv
 @author: YCC
 """
 ###  input parameters
-path_folder = r'F:\YCC\20210205\4-1895bp\1-200ms-440uM_BME_gain20'
+path_folder = r'C:\Users\pine\Desktop\1-200ms-440uM_BME_gain20'
 
 window_std = 20
 window_avg = 1
@@ -40,8 +40,7 @@ def get_name(name, bead_number):
 
 ### getting date
 def get_date():
-    today = datetime.datetime.now()
-    filename_time = str(today.year)+str(today.month)+str(today.day) # y/m/d
+    filename_time = datetime.datetime.today().strftime('%Y-%m-%d') # yy-mm-dd
     return filename_time
 
 # ### data:1D array for a bead
@@ -49,7 +48,7 @@ def get_date():
 
 #   return 
 
-### data:1D array for a bead, BM: 
+### data:1D numpy array for a bead, BM: 1D numpy array
 def calBM(data, window = 20, method = 'silding'):
   if method == 'silding': # overlapping
     iteration = len(data) - window + 1 # silding window
@@ -57,20 +56,20 @@ def calBM(data, window = 20, method = 'silding'):
     for i in range(iteration):
       data_pre = data[i: i+window]
       BM_s += [np.std(data_pre[data_pre > 0], ddof = 1)]
-      BM = BM_s  
+    BM = BM_s  
   else: # fix, non-overlapping
     iteration = int(len(data)/window)  # fix window
     BM_f = []
     for i in range(iteration):
       data_pre = data[i*window: (i+1)*window]
       BM_f += [np.std(data_pre[data_pre > 0], ddof = 1)]
-      BM = BM_f
-  return BM
+    BM = BM_f
+  return np.array(BM)
 
 
 
 
-##  
+##  save each attributes to each sheets
 def gather_sheets(writer, element, bead_number, frame_acquired, df_time):
     name = get_name(element, bead_number)
     data = get_attrs(df[element], bead_number, frame_acquired)
@@ -121,6 +120,7 @@ df = pd.read_csv(file_path)
 x_2D, y_2D, sx_2D, sy_2D = save_reshape_data(df, path_folder, filename_time)
 
 
+##  get BM of each beads
 BMx_silding = []
 BMx_fixing = []
 BMy_silding = []
@@ -153,20 +153,24 @@ criteria = np.array(criteria)
     
 
 
-BMxy = [BMx_silding] + [BMy_silding] + [BMx_fixing] + [BMy_fixing] + [ratio]
+Analyzed_data = [BMx_silding] + [BMy_silding] + [BMx_fixing] + [BMy_fixing] + [ratio]
 
 
+##  save BM to each sheet
 sheet_names = ['BMx_silding', 'BMy_silding', 'BMx_fixing', 'BMy_fixing', 'ratio_test']
 writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-fitresults_reshape_analyze.xlsx'))
 frames_acquired = x_2D.shape[0]
 dt = (x_2D.shape[0] - BMx_silding.shape[0] + 1)/avg_fps/2
-for BM, sheet_name in zip(BMxy, sheet_names):
+for BM, sheet_name in zip(Analyzed_data, sheet_names):
     if sheet_name != 'ratio_test':
         beads = get_name(sheet_name, BM.shape[1])
         df_reshape_analyze = pd.DataFrame(data=BM[:,criteria], columns=beads[criteria])
         df_reshape_analyze.insert(0, 'time', dt + np.arange(0, BM.shape[0])/avg_fps*math.floor(frames_acquired/BM.shape[0]))
         df_reshape_analyze.to_excel(writer, sheet_name=sheet_name)
 writer.save()
+
+
+
 
 # bead_number = int(max(df['aoi']))
 # frame_acquired = int(len(df['x'])/bead_number)

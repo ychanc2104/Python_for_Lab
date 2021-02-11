@@ -480,8 +480,7 @@ class DataToSave:
     
     ##  getting date
     def get_date(self):
-        today = datetime.datetime.now()
-        filename_time = str(today.year)+str(today.month)+str(today.day) # y/m/d
+        filename_time = datetime.datetime.today().strftime('%Y-%m-%d') # yy-mm-dd
         return filename_time
 
     ##  assign anme for each column to be saved
