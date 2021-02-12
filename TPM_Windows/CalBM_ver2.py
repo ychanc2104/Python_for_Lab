@@ -9,7 +9,7 @@ calculate xy-ration and xy BM for given xy position csv
 ###  input parameters
 path_folder = r'C:\Users\pine\Desktop\1-200ms-440uM_BME_gain20'
 
-window_std = 20
+window = 20
 window_avg = 1
 factor_p2n = 10000/180 # nm/pixel
 mode_select_xyratio = 'on'
@@ -26,6 +26,8 @@ import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import math
+from sklearn.decomposition import PCA
+
 
 ### input 1D array data, output: (row, column) = (frame, bead)
 def get_attrs(data_col, bead_number, frame_acquired):
@@ -33,82 +35,229 @@ def get_attrs(data_col, bead_number, frame_acquired):
     data_col_reshape = np.reshape(data_col, (frame_acquired, bead_number))
     return data_col_reshape
 
-### get name and bead number to be saved
-def get_name(name, bead_number):
-    name = [f'{name}_{i+1}' for i in range(bead_number)]
-    return np.array(name)
+### get name and bead number to be saved, 1st col is time
+def get_columns(name, bead_number):
+    columns = ['time'] + [f'{name}_{i}' for i in range(bead_number)]
+    return np.array(columns)
 
 ### getting date
 def get_date():
     filename_time = datetime.datetime.today().strftime('%Y-%m-%d') # yy-mm-dd
     return filename_time
 
-# ### data:1D array for a bead
-# def calBM_2D(data, window = 20, method = 'silding'):
+### get analyzed sheet names
+def get_analyzed_sheet_names():
+    return ['BMx_sliding', 'BMy_sliding', 'BMx_fixing', 'BMy_fixing', 
+            'sx_sy', 'xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared',
+            'avg_attrs', 'std_attrs']
+  
+### get analyzed sheet names
+def get_reshape_sheet_names():
+    return ['amplitude', 'sx', 'sy', 'x', 'y', 'theta_deg', 'offset', 'intensity', 'intensity_integral', 'ss_res']
 
-#   return 
 
 ### data:1D numpy array for a bead, BM: 1D numpy array
-def calBM(data, window = 20, method = 'silding'):
-  if method == 'silding': # overlapping
+def calBM_1D(data, window = 20, factor_p2n = 10000/180, method = 'sliding'):
+  if method == 'sliding': # overlapping
     iteration = len(data) - window + 1 # silding window
     BM_s = []
     for i in range(iteration):
       data_pre = data[i: i+window]
-      BM_s += [np.std(data_pre[data_pre > 0], ddof = 1)]
+      BM_s += [factor_p2n * np.std(data_pre[data_pre > 0], ddof = 1)]
     BM = BM_s  
   else: # fix, non-overlapping
     iteration = int(len(data)/window)  # fix window
     BM_f = []
     for i in range(iteration):
       data_pre = data[i*window: (i+1)*window]
-      BM_f += [np.std(data_pre[data_pre > 0], ddof = 1)]
+      BM_f += [factor_p2n * np.std(data_pre[data_pre > 0], ddof = 1)]
     BM = BM_f
   return np.array(BM)
 
+def calBM_2D(data_2D, avg_fps, window = 20, factor_p2n = 10000/180):
+    ##  get BM of each beads
+    BM_sliding = []
+    BM_fixing = []
+    for data_1D in data_2D.T:
+        BM_sliding += [calBM_1D(data_1D, window = window, method = 'sliding')]
+        BM_fixing += [calBM_1D(data_1D, window = window, method = 'fixing')]
+    BM_sliding = np.array(BM_sliding).T
+    BM_fixing = np.array(BM_fixing).T
 
+    return BM_sliding, BM_fixing
+        
+##  cal BMx and BMy ratio
+def get_xy_ratio(*args):
+    xy_ratio = []
+    for data in args:
+        xy_ratio += [data[0]/data[1]]
+    return xy_ratio
 
-
-##  save each attributes to each sheets
-def gather_sheets(writer, element, bead_number, frame_acquired, df_time):
-    name = get_name(element, bead_number)
-    data = get_attrs(df[element], bead_number, frame_acquired)
+##  save each attributes to each sheets, data:2D array
+def gather_reshape_sheets(df, sheet_name, bead_number, frame_acquired, dt, avg_fps):
+    name = get_columns(sheet_name, bead_number)
+    data = get_attrs(df[sheet_name], bead_number, frame_acquired)
+    data = np.array(append_time([data], avg_fps, frame_acquired))
+    data = np.reshape(data, (frame_acquired, bead_number+1))             
     df_reshape = pd.DataFrame(data=data, columns=name)
-    df_reshape.insert(0, 'time', df_time)
-    df_reshape.to_excel(writer, sheet_name=element)
     return df_reshape
 
-
-### get sx*sy and sx/sy ,and write reshape data to excel
-def save_reshape_data(df, path_folder, filename_time):
+### get reshape data all
+def get_reshape_data(df, avg_fps, window = 20):
     bead_number = int(max(df['aoi']))
     frame_acquired = int(len(df['x'])/bead_number)
-    df.insert(5, 'sx_sy', df['sx']*df['sy'])
-    df.insert(6, 'sx_over_sy', df['sx']/df['sy'])
-    df_time = pd.DataFrame(data=np.arange(0,frame_acquired)/5)
-    writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-fitresults_reshape.xlsx'))
-    for i, element in enumerate(df.columns):
+    df_reshape = dict()
+    dt = window/2/avg_fps
+    for i, sheet_name in enumerate(df.columns):
         if i > 1:
-            if element == 'x':
-                df_reshape = gather_sheets(writer, element, bead_number, frame_acquired, df_time)
-                x_2D = np.array(df_reshape)[:,1:]
-                
-            elif element == 'y':
-                df_reshape = gather_sheets(writer, element, bead_number, frame_acquired, df_time)
-                y_2D = np.array(df_reshape)[:,1:]
-            
-            elif element == 'sx':
-                df_reshape = gather_sheets(writer, element, bead_number, frame_acquired, df_time)
-                sx_2D = np.array(df_reshape)[:,1:]
-            
-            elif element == 'sy':
-                df_reshape = gather_sheets(writer, element, bead_number, frame_acquired, df_time)
-                sy_2D = np.array(df_reshape)[:,1:]
-                
-            else:
-                df_reshape = gather_sheets(writer, element, bead_number, frame_acquired, df_time)
+            df_reshape[sheet_name] = gather_reshape_sheets(df, sheet_name, bead_number, frame_acquired, dt, avg_fps)
+    return df_reshape
+
+##  add time axis into first column, data: list of 2D array,(r,c)=(frame,bead)
+def append_time(analyzed_data, avg_fps, frames_acquired, window=20):
+    dt = window/2/avg_fps
+    analyzed_append_data = []
+    for data in analyzed_data:
+        time = dt + np.arange(0, data.shape[0])/avg_fps*math.floor(frames_acquired/data.shape[0])
+        time = np.reshape(time, (-1,1))
+        analyzed_append_data += [np.append(time, data, axis=1)]
+        
+    return analyzed_append_data
+
+# get anaylyzed data
+def get_analyzed_data(df_reshape, window, avg_fps, factor_p2n=factor_p2n):
+    x_2D = np.array(df_reshape['x'])[:,1:]
+    y_2D = np.array(df_reshape['y'])[:,1:]
+    sx_2D = np.array(df_reshape['sx'])[:,1:]
+    sy_2D = np.array(df_reshape['sy'])[:,1:]    
+    bead_number = x_2D.shape[1]
+    frame_acquired = x_2D.shape[0]
+    
+    BMx_sliding, BMx_fixing = calBM_2D(x_2D, avg_fps, factor_p2n=factor_p2n)
+    BMy_sliding, BMy_fixing = calBM_2D(y_2D, avg_fps, factor_p2n=factor_p2n)
+    sx_sy = sx_2D * sy_2D
+    xy_ratio = get_xy_ratio([BMx_sliding, BMy_sliding], [BMx_fixing, BMy_fixing], [sx_2D**2, sy_2D**2])
+    data_analyzed_avg, data_analyzed_std = avg_std_operator(BMx_sliding, BMx_fixing, BMy_sliding, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2])    
+    data_reshaped_avg, data_reshaped_std = df_reshape_avg_std_operator(df_reshape)
+    
+    data_avg_2D = np.append(data_analyzed_avg, data_reshaped_avg, axis=1)
+    data_std_2D = np.append(data_analyzed_std, data_reshaped_std, axis=1)
+    
+    analyzed_data = [BMx_sliding, BMy_sliding, BMx_fixing, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2]]
+    analyzed_data = append_time(analyzed_data, avg_fps, frame_acquired, window=20)
+    analyzed_data = analyzed_data + [data_avg_2D, data_std_2D]
+
+    analyzed_sheet_names = get_analyzed_sheet_names()
+    df_reshape_analyzed = df_reshape.copy()
+    # writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-fitresults_reshape_analyzed.xlsx'))
+
+    dt = window/2/avg_fps
+    for data, sheet_name in zip(analyzed_data, analyzed_sheet_names):
+        if sheet_name == 'avg_attrs':
+            df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=get_analyzed_sheet_names()[:-2]+get_reshape_sheet_names())
+        elif sheet_name == 'std_attrs':
+            df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=get_analyzed_sheet_names()[:-2]+get_reshape_sheet_names())
+        else:
+            df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=get_columns(sheet_name, bead_number))
+
+    return df_reshape_analyzed
+
+
+##  data average operator for multiple columns(2D-array), output: (r,c)=(beads,attrs)
+def avg_std_operator(*args):
+    data_avg_2D = []
+    data_std_2D = []
+    for data_2D in args:
+        data_avg = []
+        data_std = []
+        for data in data_2D.T:
+            data_avg += [np.mean(data, axis=0)]
+            data_std += [np.std(data, axis=0, ddof=1)]
+        data_avg_2D += [np.array(data_avg)]
+        data_std_2D += [np.array(data_std)]
+    return np.nan_to_num(data_avg_2D).T, np.nan_to_num(data_std_2D).T
+
+##  get avg and std for reshaped DataFrame
+def df_reshape_avg_std_operator(df_reshape):
+    data_avg = []
+    data_std = []
+    for i, sheet_name in enumerate(df.columns):
+        if i >1:
+            data = np.array(df_reshape[sheet_name])[:,1:]
+            data_avg += [np.mean(data, axis=0)]
+            data_std += [np.std(data, axis=0, ddof=1)]
+    return np.array(data_avg).T, np.array(data_std).T        
+
+
+
+##  get selection criteria
+def get_criteria(df_reshape_analyzed):
+    ratio = df_reshape_analyzed['avg_attrs'][['xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared']]
+    ratio = np.nan_to_num(ratio)
+    c = ((ratio>0.8) & (ratio <1.2))
+    criteria = []
+    for row_boolean in c:
+        criteria += [all(row_boolean)]
+    return np.array(criteria)
+
+
+##  save all dictionary of DataFrame to excel sheets
+def save_all_dict_df_to_excel(dict_df, path_folder, filename='fitresults_reshape_analyzed.xlsx'):
+    sheet_names = get_analyzed_sheet_names() + get_analyzed_sheet_names()
+    writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
+    for sheet_name in sheet_names:
+        df_save = dict_df[sheet_name]
+        df_save.to_excel(writer, sheet_name=sheet_name, index=False)
     writer.save()
-    return x_2D, y_2D, sx_2D, sy_2D
+
+##  save selected dictionary of DataFrame to excel sheets
+def save_selected_dict_df_to_excel(dict_df, path_folder, filename='fitresults_reshape_analyzed_selected.xlsx'):
+    criteria = get_criteria(dict_df)
+    criteria = np.append(np.array(True),criteria)
+    sheet_names = get_analyzed_sheet_names() + get_analyzed_sheet_names()
+    writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
+    for sheet_name in sheet_names:
+        if sheet_name != 'avg_attrs' and sheet_name != 'std_attrs':
+            df_save = df_reshape_analyzed[sheet_name]
+            data = np.array(df_save)[:,criteria]
+            df_save_selected = pd.DataFrame(data=data, columns=df_save.columns[criteria])
+            df_save_selected.to_excel(writer, sheet_name=sheet_name, index=False)
+        else: # for avg_attrs and std_attrs sheets
+            df_save = df_reshape_analyzed[sheet_name]
+            data = np.array(df_save).T[:,criteria[1:]]
+            df_save_selected = pd.DataFrame(data=data.T, index=get_columns('bead', 12)[1:][criteria[1:]], columns=df_save.columns)
+            df_save_selected.to_excel(writer, sheet_name=sheet_name, index=True)
+    writer.save()
+
+##  save removed dictionary of DataFrame to excel sheets
+def save_removed_dict_df_to_excel(dict_df, path_folder, filename='fitresults_reshape_analyzed_removed.xlsx'):
+    criteria = get_criteria(dict_df)
+    criteria = ~np.append(np.array(False),criteria)
+    sheet_names = get_analyzed_sheet_names() + get_analyzed_sheet_names()
+    writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
+    for sheet_name in sheet_names:
+        if sheet_name != 'avg_attrs' and sheet_name != 'std_attrs':
+            df_save = df_reshape_analyzed[sheet_name]
+            data = np.array(df_save)[:,criteria]
+            df_save_selected = pd.DataFrame(data=data, columns=df_save.columns[criteria])
+            df_save_selected.to_excel(writer, sheet_name=sheet_name, index=False)
+        else: # for avg_attrs and std_attrs sheets
+            df_save = df_reshape_analyzed[sheet_name]
+            data = np.array(df_save).T[:,criteria[1:]]
+            df_save_selected = pd.DataFrame(data=data.T, index=get_columns('bead', 12)[1:][criteria[1:]], columns=df_save.columns)
+            df_save_selected.to_excel(writer, sheet_name=sheet_name, index=True)
+    writer.save()
+
+
+### normalize to mean = 0, std = 1
+def normalize_data(data):
+    data_nor = []
+    for datum in data.T:
+        mean = np.mean(datum)
+        std = np.std(datum, ddof=1)
+        datum_nor = (datum-mean)/std
+        data_nor += [datum_nor]
+    return np.array(data_nor).T
 
 
 ### getting date
@@ -117,173 +266,29 @@ filename_time = get_date()
 ### read tracking result file
 file_path = glob(os.path.join(path_folder, '*-fitresults.csv'))[-1]
 df = pd.read_csv(file_path)
-x_2D, y_2D, sx_2D, sy_2D = save_reshape_data(df, path_folder, filename_time)
 
+df_reshape = get_reshape_data(df, avg_fps, window=window)
+df_reshape_analyzed = get_analyzed_data(df_reshape, window, avg_fps, factor_p2n)
 
-##  get BM of each beads
-BMx_silding = []
-BMx_fixing = []
-BMy_silding = []
-BMy_fixing = []
-BM_all = []
-for (x_1D, y_1D) in zip(x_2D.T, y_2D.T):
-    BMx_silding += [calBM(x_1D, window = 20, method = 'silding')]
-    BMx_fixing += [calBM(x_1D, window = 20, method = 'fixing')]
-    BMy_silding += [calBM(y_1D, window = 20, method = 'silding')]
-    BMy_fixing += [calBM(y_1D, window = 20, method = 'fixing')]
-BM_all += [[BMx_silding]] + [[BMx_fixing]] + [[BMy_silding]] + [[BMy_fixing]]
-    
-    
-BMx_silding = factor_p2n * np.array(BMx_silding).T
-BMy_silding = factor_p2n * np.array(BMy_silding).T
-xy_ratio_silding = np.mean(BMx_silding/BMy_silding, 0)
-BMx_fixing = factor_p2n * np.array(BMx_fixing).T
-BMy_fixing = factor_p2n * np.array(BMy_fixing).T
-xy_ratio_fixing = np.mean(BMx_fixing/BMy_fixing, 0)
-sxsy_2_ratio = np.mean(sx_2D/sy_2D, 0)**2
-
-ratio = np.array([xy_ratio_silding] + [xy_ratio_fixing] + [sxsy_2_ratio]).T
-ratio = np.nan_to_num(ratio)
-
-c = (ratio>0.8) & (ratio <1.2)
-criteria = []
-for row_boolean in c:
-   criteria += [all(row_boolean)]
-criteria = np.array(criteria)
-    
-
-
-Analyzed_data = [BMx_silding] + [BMy_silding] + [BMx_fixing] + [BMy_fixing] + [ratio]
-
-
-##  save BM to each sheet
-sheet_names = ['BMx_silding', 'BMy_silding', 'BMx_fixing', 'BMy_fixing', 'ratio_test']
-writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-fitresults_reshape_analyze.xlsx'))
-frames_acquired = x_2D.shape[0]
-dt = (x_2D.shape[0] - BMx_silding.shape[0] + 1)/avg_fps/2
-for BM, sheet_name in zip(Analyzed_data, sheet_names):
-    if sheet_name != 'ratio_test':
-        beads = get_name(sheet_name, BM.shape[1])
-        df_reshape_analyze = pd.DataFrame(data=BM[:,criteria], columns=beads[criteria])
-        df_reshape_analyze.insert(0, 'time', dt + np.arange(0, BM.shape[0])/avg_fps*math.floor(frames_acquired/BM.shape[0]))
-        df_reshape_analyze.to_excel(writer, sheet_name=sheet_name)
-writer.save()
-
-
-
-
-# bead_number = int(max(df['aoi']))
-# frame_acquired = int(len(df['x'])/bead_number)
-# df.insert(5, 'sx_sy', df['sx']*df['sy'])
-# df.insert(6, 'sx_over_sy', df['sx']/df['sy'])
-
-
-# writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-fitresults_reshape.xlsx'))
-# for i, element in enumerate(df.columns):
-#     if i > -1:
-#         name = get_name(element, bead_number)
-#         data = get_attrs(df[element], bead_number, frame_acquired)
-#         df_reshape = pd.DataFrame(data=data, columns=name)
-#         df_reshape.to_excel(writer, sheet_name=element)
-# writer.save()
+save_all_dict_df_to_excel(df_reshape_analyzed, path_folder, filename='fitresults_reshape_analyzed.xlsx')
+save_selected_dict_df_to_excel(df_reshape_analyzed, path_folder, filename='fitresults_reshape_analyzed_selected.xlsx')
+save_removed_dict_df_to_excel(df_reshape_analyzed, path_folder, filename='fitresults_reshape_analyzed_removed.xlsx')
 
 
 
 
 
-# with open(file_path, newline='') as csvfile:
-#     rows = csv.reader(csvfile)
-#     # bead_number = len([x for x in rows])
-#     x = []
-#     y = []
-#     sx = []
-#     sy = []
-#     intensity = []
-#     sheet = []
-#     for row in rows:
-#         sheet += [row]
-#     bead_number = int(len(sheet[0])/5)
-#     frame_number = len(sheet) - 1
-#     bead_namexy = ['BMx '+str(i+1) for i in range(bead_number)]+['BMy '+str(i+1) for i in range(bead_number)]+['bsize '+str(i+1) for i in range(bead_number)]+['I '+str(i+1) for i in range(bead_number)]
-#     for i in range(frame_number):
-#         x += [sheet[i+1][0:bead_number]]
-#         y += [sheet[i+1][(bead_number):bead_number*2]]
-#         sx += [sheet[i+1][(bead_number*2):bead_number*3]]
-#         sy += [sheet[i+1][(bead_number*3):bead_number*4]]
-#         intensity += [sheet[i+1][(bead_number*4):bead_number*5]]
-#
-#     x = np.array(x, dtype = np.float32)
-#     y = np.array(y, dtype = np.float32)
-#     sx = np.array(sx, dtype = np.float32)
-#     sy = np.array(sy, dtype = np.float32)
-#     intensity = np.array(intensity, dtype = np.float32)
-#     BMx = []
-#     BMy = []
-#     for k in range(bead_number):
-#         print('start analyzing bead' + str(k+1))
-#         for i in range(frame_number-window_std+1): #silding window
-#             x_slice = x[i:window_std+i,k] # choose 'window_std' point at a time
-#             y_slice = y[i:window_std+i,k]
-#             for j in range(window_std): #for ignoring 0 element
-#                 x_slice_del = []
-#                 y_slice_del = []
-#                 xy_i_del = []
-#                 if (x_slice[j] <= 0) or (y_slice[j] <= 0):
-#                     xy_i_del += [j]
-#             if xy_i_del != []:  # there are fitting error points
-#                 x_slice_del = np.delete(x_slice,xy_i_del)
-#                 y_slice_del = np.delete(y_slice,xy_i_del)
-#                 BMx += [np.std(x_slice_del,ddof = 1)]
-#                 BMy += [np.std(y_slice_del,ddof = 1)]
-#             else:
-#                 BMx += [np.std(x_slice,ddof = 1)]
-#                 BMy += [np.std(y_slice,ddof = 1)]
-#     BMx = factor_p2n * np.reshape(BMx, (bead_number,frame_number-window_std+1)).transpose()
-#     BMy = factor_p2n * np.reshape(BMy, (bead_number,frame_number-window_std+1)).transpose()
-#     BMz = sx*sy
-#     I = intensity
-#
-# ###  select xy ratio
-# BMx_mean = np.mean(np.transpose(BMx),1)
-# if mode_select_xyratio == 'on': #select xy ratio
-#
-#     # ratio_xy = (sum(BMx)/sum(BMy))
-#     ratio_xy = np.mean(BMx/BMy, axis=0)
-#     i_rxy_dele = [x for x in range(bead_number) if (ratio_xy[x] > upper_r_xy) or (ratio_xy[x] < lower_r_xy) or (BMx_mean[x] > 200)]
-#     BMx = np.delete(BMx,i_rxy_dele,axis = 1) # delete  (bead#)
-#     BMy = np.delete(BMy,i_rxy_dele,axis = 1)
-#     BMz = np.delete(BMz,i_rxy_dele,axis = 1)
-#     BMI = np.delete(I,i_rxy_dele,axis = 1)
-#     bead_namexy = np.delete(bead_namexy,i_rxy_dele+list(np.array(i_rxy_dele)+bead_number)+list(np.array(i_rxy_dele)+2*bead_number)+list(np.array(i_rxy_dele)+3*bead_number))
-#     bead_sele_number = np.shape(BMx)[1]
-#     BMxyz = np.empty((frame_number, bead_sele_number*4))
-#     BMxyz[:frame_number-window_std+1,:bead_sele_number] = BMx
-#     BMxyz[:frame_number-window_std+1,bead_sele_number:bead_sele_number*2] = BMy
-#     BMxyz[:,bead_sele_number*2:bead_sele_number*3] = BMz
-#     BMxyz[:,bead_sele_number*3:] = BMI
-#     # bead_namexy
-# else:
-#
-#     BMxyz = np.empty((frame_number, bead_number*3))
-#     BMxyz[:frame_number-window_std+1,:bead_sele_number] = BMx
-#     BMxyz[:frame_number-window_std+1,bead_sele_number:bead_sele_number*2] = BMy
-#     BMxyz[:,bead_sele_number*2:] = BMz
-#
-# BMx_mean = np.mean(np.transpose(BMx),1)
-#
-# ###  save to csv
-# with open(path_folder +'/' +filename_time + 'selectxy-' + mode_select_xyratio + '-xyBM.csv', 'w', newline='') as csvfile:
-#     writer = csv.writer(csvfile)
-#     writer.writerow(bead_namexy)
-#     writer.writerows(BMxyz)
-#
-# plt.figure
-# plt.hist(BMx_mean,20)
-# print('finish saving')
+# ### PCA analysis
+# a = df_reshape_analyzed['avg_attrs']
+# b = df_reshape_analyzed['std_attrs']
+# c = np.append(a, b, axis=1)
+# d = normalize_data(c)
+# ##   validate by built-in-function
+# pca = PCA(n_components=5)
+# result = pca.fit(d)
+# e = result.transform(d)
 
-
-
-
+# plt.plot(e[:,0], e[:,1],'o')
 
 
 
