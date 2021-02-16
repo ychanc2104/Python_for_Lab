@@ -117,35 +117,38 @@ def append_time(analyzed_data, avg_fps, frames_acquired, window=20):
         time = dt + np.arange(0, data.shape[0])/avg_fps*math.floor(frames_acquired/data.shape[0])
         time = np.reshape(time, (-1,1))
         analyzed_append_data += [np.append(time, data, axis=1)]
-        
     return analyzed_append_data
 
-# get anaylyzed data, BM, sxsy,xy ratio...
-def get_analyzed_data(df_reshape, window, avg_fps, factor_p2n=factor_p2n):
+def get_pre_analyzed_data(df_reshape):
     x_2D = np.array(df_reshape['x'])
     y_2D = np.array(df_reshape['y'])
     sx_2D = np.array(df_reshape['sx'])
     sy_2D = np.array(df_reshape['sy'])  
     bead_number = x_2D.shape[1]
     frame_acquired = x_2D.shape[0]
-    
+    return x_2D, y_2D, sx_2D, sy_2D, bead_number, frame_acquired
+
+def append_analyed_data(x_2D, y_2D, sx_2D, sy_2D, factor_p2n, avg_fps, frame_acquired, window):
     BMx_sliding, BMx_fixing = calBM_2D(x_2D, avg_fps, factor_p2n=factor_p2n)
     BMy_sliding, BMy_fixing = calBM_2D(y_2D, avg_fps, factor_p2n=factor_p2n)
     sx_sy = sx_2D * sy_2D
     xy_ratio = get_xy_ratio([BMx_sliding, BMy_sliding], [BMx_fixing, BMy_fixing], [sx_2D**2, sy_2D**2])
     data_analyzed_avg, data_analyzed_std = avg_std_operator(BMx_sliding, BMx_fixing, BMy_sliding, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2])    
     data_reshaped_avg, data_reshaped_std = df_reshape_avg_std_operator(df_reshape)
-    
+    #append data or time together
     data_avg_2D = np.append(data_analyzed_avg, data_reshaped_avg, axis=1)
     data_std_2D = np.append(data_analyzed_std, data_reshaped_std, axis=1)
-    
     analyzed_data = [BMx_sliding, BMy_sliding, BMx_fixing, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2]]
     analyzed_data = append_time(analyzed_data, avg_fps, frame_acquired, window=20)
     analyzed_data = analyzed_data + [data_avg_2D, data_std_2D]
-
+    return data_avg_2D, data_std_2D, analyzed_data
+    
+## get anaylyzed data, BM, sxsy,xy ratio...
+def get_analyzed_data(df_reshape, window, avg_fps, factor_p2n=factor_p2n):
+    x_2D, y_2D, sx_2D, sy_2D, bead_number, frame_acquired = get_pre_analyzed_data(df_reshape)
+    data_avg_2D, data_std_2D, analyzed_data = append_analyed_data(x_2D, y_2D, sx_2D, sy_2D, factor_p2n, avg_fps, frame_acquired, window)
     analyzed_sheet_names = get_analyzed_sheet_names()
     df_reshape_analyzed = df_reshape.copy()
-    
     # save data to dictionary of DataFrame
     for data, sheet_name in zip(analyzed_data, analyzed_sheet_names):
         if sheet_name == 'avg_attrs':
@@ -154,9 +157,7 @@ def get_analyzed_data(df_reshape, window, avg_fps, factor_p2n=factor_p2n):
             df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=get_analyzed_sheet_names()[:-2]+get_reshape_sheet_names()).set_index(get_columns('bead', data.shape[0])[1:])
         else:
             df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=get_columns(sheet_name, bead_number)).set_index('time')
-
     return df_reshape_analyzed
-
 
 ##  data average operator for multiple columns(2D-array), output: (r,c)=(beads,attrs)
 def avg_std_operator(*args):
@@ -183,16 +184,6 @@ def df_reshape_avg_std_operator(df_reshape):
             data_std += [np.std(data, axis=0, ddof=1)]
     return np.array(data_avg).T, np.array(data_std).T        
 
-##  get selection criteria
-def get_criteria(df_reshape_analyzed):
-    ratio = df_reshape_analyzed['avg_attrs'][['xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared']]
-    ratio = np.nan_to_num(ratio)
-    c = ((ratio>0.8) & (ratio <1.2))
-    criteria = []
-    for row_boolean in c:
-        criteria += [all(row_boolean)]
-    return np.array(criteria)
-
 ##  save dictionary of DataFrame to excel sheets according to criteria(np-array)
 def save_dict_df_to_excel(df_reshape_analyzed, criteria, path_folder, filename='fitresults_reshape_analyzed.xlsx'):
     # criteria = get_criteria(df_reshape_analyzed)
@@ -209,10 +200,9 @@ def save_dict_df_to_excel(df_reshape_analyzed, criteria, path_folder, filename='
         df_save_selected.to_excel(writer, sheet_name=sheet_name, index=True)
     writer.save()
 
-
 ##  save all dictionary of DataFrame to excel sheets
 def save_all_dict_df_to_excel(df_reshape_analyzed, path_folder, filename='fitresults_reshape_analyzed.xlsx'):
-    sheet_names = get_analyzed_sheet_names() + get_analyzed_sheet_names()
+    sheet_names = get_analyzed_sheet_names() + get_reshape_sheet_names()
     writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
     for sheet_name in sheet_names:
         df_save = df_reshape_analyzed[sheet_name]
@@ -223,7 +213,7 @@ def save_all_dict_df_to_excel(df_reshape_analyzed, path_folder, filename='fitres
 ##  save selected dictionary of DataFrame to excel sheets
 def save_selected_dict_df_to_excel(df_reshape_analyzed, path_folder, filename='fitresults_reshape_analyzed_selected.xlsx'):
     criteria = get_criteria(df_reshape_analyzed)
-    sheet_names = get_analyzed_sheet_names() + get_analyzed_sheet_names()
+    sheet_names = get_analyzed_sheet_names() + get_reshape_sheet_names()
     writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
     for sheet_name in sheet_names:
         df_save = df_reshape_analyzed[sheet_name]
@@ -236,9 +226,9 @@ def save_selected_dict_df_to_excel(df_reshape_analyzed, path_folder, filename='f
 
 
 ##  save removed dictionary of DataFrame to excel sheets
-def save_removed_dict_df_to_excel(dict_df, path_folder, filename='fitresults_reshape_analyzed_removed.xlsx'):
-    criteria = get_criteria(dict_df)
-    sheet_names = get_analyzed_sheet_names() + get_analyzed_sheet_names()
+def save_removed_dict_df_to_excel(df_reshape_analyzed, path_folder, filename='fitresults_reshape_analyzed_removed.xlsx'):
+    criteria = get_criteria(df_reshape_analyzed)
+    sheet_names = get_analyzed_sheet_names() + get_reshape_sheet_names()
     writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
     for sheet_name in sheet_names:
         df_save = df_reshape_analyzed[sheet_name]
@@ -248,6 +238,16 @@ def save_removed_dict_df_to_excel(dict_df, path_folder, filename='fitresults_res
             df_save_selected = df_save[~criteria]
         df_save_selected.to_excel(writer, sheet_name=sheet_name, index=True)
     writer.save()
+
+##  get selection criteria
+def get_criteria(df_reshape_analyzed):
+    ratio = df_reshape_analyzed['avg_attrs'][['xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared']]
+    ratio = np.nan_to_num(ratio)
+    c = ((ratio>0.8) & (ratio <1.2))
+    criteria = []
+    for row_boolean in c:
+        criteria += [all(row_boolean)]
+    return np.array(criteria)
 
 
 ### normalize to mean = 0, std = 1
