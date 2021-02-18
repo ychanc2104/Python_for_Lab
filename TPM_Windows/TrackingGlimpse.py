@@ -6,32 +6,11 @@ Flowchart
 3. Save four files for fitting results
 """
 
-### setting parameters
-path_folder = r'C:\Users\pine\Desktop\1-200ms-440uM_BME_gain20'
-
-# size_tofit = 10
-read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile 
-frame_setread_num = 50 # only useful when mode = 0, can't exceed frame number of a file
-
-# fit_mode = 'multiprocessing' #'multiprocessing'
-path_mode = 'auto' # 'a': auto-pick cd, 'm': manually select
-if path_mode == 'm':
-    path_folder = input('type your folder path ')
-    
-criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
-aoi_size = 20
-frame_read_forcenter = 0 # no need to change, frame to autocenter beads
-N_loc = 40 # number of frame to stack and localization
-contrast = 10
-low = 40
-high = 120
-blacklevel = 40
-
-### preparing input parameters
-# settings = [criteria_dist, aoi_size, frame_read_forcenter, N_loc, contrast, low, high, blacklevel]
 ### import used modules first
 import scipy.optimize as opt
 import math
+import random
+import string
 from sys import platform
 import multiprocessing as mp
 import ctypes
@@ -45,9 +24,37 @@ from glob import glob
 import datetime
 from PIL import Image,ImageEnhance
 from multiprocessing import freeze_support
-import csv
 import time
 import pandas as pd
+import tkinter as tk
+from tkinter import filedialog
+
+### setting parameters
+# path_folder = r'F:\YCC\20210205\4-1895bp\2-200ms-440uM_BME_gain20'
+
+# size_tofit = 10
+read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+frame_setread_num = 50 # only useful when mode = 0, can't exceed frame number of a file
+
+# fit_mode = 'multiprocessing' #'multiprocessing'
+path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
+
+if path_mode == 'm':
+    root = tk.Tk()
+    root.withdraw()
+    path_folder = filedialog.askdirectory()
+else:
+    path_folder = r'F:\YCC\20210205\4-1895bp\2-200ms-440uM_BME_gain20'
+
+criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
+aoi_size = 20
+frame_read_forcenter = 0 # no need to change, frame to autocenter beads
+N_loc = 40 # number of frame to stack and localization
+contrast = 15
+low = 40
+high = 120
+blacklevel = 40
+
 
 ### define a class for all glimpse data
 class BinaryImage:
@@ -56,12 +63,12 @@ class BinaryImage:
                  N_loc = 20, contrast = 10, low = 50, high = 150,
                   blacklevel = 50):
         self.path_folder = os.path.abspath(path_folder)
-        self.path_header = os.path.join(path_folder, 'header.glimpse')
+        self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
         self.path_header_utf8 = self.path_header.encode('utf8')
-        self.path_data = [x for x in sorted(glob(self.path_folder + '/*.glimpse')) if x != self.path_header ]
+        self.path_data = [os.path.abspath(x) for x in sorted(glob(os.path.join(self.path_folder, '*.glimpse'))) if x != self.path_header ]
         [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
-        [self.frame_per_file, self.path_data, self.data_type, self.size_a_image] = self.getdatainfo()
-        self.time_axis = np.arange(0, self.frames_acquired)/self.avg_fps
+        self.data_type, self.size_a_image, self.frame_per_file = self.getdatainfo()
+        # self.time_axis = np.arange(0, self.frames_acquired)/self.avg_fps
 
         self.criteria_dist = criteria_dist
         self.aoi_size = aoi_size
@@ -72,12 +79,15 @@ class BinaryImage:
         self.high = high
         self.blacklevel = blacklevel
         self.offset, self.fileNumber = self.getoffset()
-        
-        self.read1 = [] # one image at i
-        self.readN = [] # N image from i
-        # self.contours = []
-        # self.edges = []
-        self.image = [] # image used to process
+
+        self.cut_image_width = 30
+
+        # self.read1 = [] # one image at i
+        self.readN = self.readGlimpseN(frame_read_forcenter, N_loc) # N image from i
+        self.contours = []
+        self.saved_contours = []
+        self.edges = []
+        self.image = self.stackimageN(self.readN) # image used to be localized
         self.cX = []
         self.cY = []
         self.perimeters = []
@@ -90,8 +100,8 @@ class BinaryImage:
         self.y_fit = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
 
         self.bead_number = 0
-        self.initial_guess = []
-        self.parameters = []
+        self.initial_guess = [40,3,3,11,11,0,10]
+        self.initial_guess_beads = []
         self.N = 0
         
      
@@ -99,45 +109,88 @@ class BinaryImage:
     ##  main for localization
     def Localize(self):
         print('start centering')
-        imageN = self.readGlimpseN(self.frame_read_forcenter, self.N_loc)
-        image = self.stackimageN(imageN)
+        image = self.image
         image = self.enhance_contrast(image, self.contrast)
         contours = self.getContour(image, self.low, self.high)
         cX, cY = self.getXY(contours)
         cX, cY = self.removeXY(cX, cY, self.criteria_dist)
         intensity = self.getintensity(image, cX, cY, self.aoi_size)
         cX, cY = self.removeblack(cX, cY, intensity, blacklevel)
+        cX, cY = self.sortXY(cX, cY)
         self.cX = cX
         self.cY = cY
         self.bead_number = len(cX)
         image = self.drawAOI(image, cX, cY, self.aoi_size)
         self.show_grayimage(image, save = True)
-        # self.x_fit, self.y_fit, self.bead_number, self.initial_guess, self.parameters, self.N = self.preparefit_info(
-        #     read_mode, frame_setread_num, self.frames_acquired, self.bead_number, self.aoi_size)
         print('finish centering')
         return image, cX, cY
     
     ##  main for tracking all frames and all beads(cX, cY)
     def Track_All_Frames(self, read_mode, frame_setread_num):
-        # read_mode = self.read_mode
-        # frame_setread_num = self.frame_setread_num
         cX = self.cX
         cY = self.cY
-        self.x_fit, self.y_fit, self.initial_guess, self.parameters, self.N = self.preparefit_info(
-            read_mode, frame_setread_num, self.frames_acquired, self.aoi_size)
-        p0 = np.array(self.parameters)
+        frames_acquired = self.frames_acquired
+        aoi_size = self.aoi_size
+        initial_guess, initial_guess_beads, N = self.preparefit_info(read_mode, frame_setread_num, frames_acquired)
+        self.initial_guess_beads = initial_guess_beads
+        p0_1 = np.array(initial_guess_beads) # initialize fitting parameters for each bead
         result = []
-        for i in range(self.N):
+        for i in range(N):
             image = self.readGlimpse1(i)
-            data, parameters = self.trackbead(image, cX, cY, self.aoi_size, i+1, p0)
-            p0 = self.update_p0(p0, parameters, i+1) # update fitting initial guess
+            data, p0_2 = self.trackbead(image, cX, cY, aoi_size, i, p0_1)
+            p0_1 = self.update_p0(p0_1, p0_2, i) # update fitting initial guess
             result += data
             print(f'frame {i}')
+        self.initial_guess_beads = p0_1
         result_saved = np.array(result)
-        return result_saved, self.time_axis
+        return result_saved
     
 
 ###############################################################################
+    ##  tracking bead position in a image, get all parameters and frame number
+    def trackbead(self, image, cX, cY, aoi_size, frame, p0):
+        bead_number = len(cX)
+        para_fit = []
+        bounds = self.get_bounds(aoi_size)
+        x = self.x_fit
+        y = self.y_fit
+        initial_guess_beads = self.initial_guess_beads
+        initial_guess = self.initial_guess
+        for j in range(bead_number):
+            image_tofit, intensity = self.getAOI(image, cY[j], cX[j], aoi_size)
+            if intensity < 3500:
+                contrast = 2
+                image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
+                image_tofit = np.array(image_tofit)
+            ## enhance contrast
+            # image_bead = image[horizontal-10:(horizontal+10), vertical-10:(vertical+10)] # [x,y] = [width, height]
+            # image_bead_bur = cv2.GaussianBlur(image_bead, (5, 5),2,2)
+            ## increase contrast
+            # enh_con = ImageEnhance.Contrast(Image.fromarray(image_bead_bur))
+            # contrast = 10
+            # image_contrasted = enh_con.enhance(contrast)
+            # image_tofit = np.array(image_contrasted)
+            try:
+                popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), p0[j], bounds=bounds)
+                ss_res = self.get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
+                # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
+                # data_fitted = twoD_Gaussian((x, y), *popt)
+                intensity_integral = 2 * math.pi * popt[0] * popt[1] * popt[2]
+                para_fit += [
+                    [frame] + [j + 1] + list(popt) +
+                    [intensity] + [intensity_integral] + [ss_res]
+                ]
+                initial_guess_beads[j] = list(popt)
+
+            except RuntimeError:
+                # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), initial_guess)
+                para_fit += [[frame] + [j + 1] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+                initial_guess_beads[j] = initial_guess  # initial guess for all beads
+            except:
+                para_fit += [[frame] + [j + 1] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+                initial_guess_beads[j] = initial_guess
+        return para_fit, np.array(initial_guess_beads)
+
     ### methods for localization
     ##  stack multiple images    
     def stackimageN(self, imageN):
@@ -153,36 +206,54 @@ class BinaryImage:
         image_contrasted = enh_con.enhance(contrast)
         image = np.array(image_contrasted)
         return image
-        
-    
+
     ##  get egde using frame in file,f
-    def getContour(self, image, low = 30, high = 90): 
+    def getContour(self, image, low = 30, high = 90):
+        cut = self.cut_image_width
         ##  get edges using openCV
-        image_cut = np.uint8(image[0+18:self.height-18, 0+32:self.width-32])
+        image_cut = np.uint8(image[0+cut:self.height-cut, 0+cut:self.width-cut])
         edges = cv2.Canny(image_cut, low, high) # cv2.Canny(image, a, b), reject value < a and detect value > b
         # ret, thresh = cv2.threshold(self.edges, 0, 50, cv2.THRESH_BINARY) # THRESH_BINARY: transform into black/white depending on low/high value
         contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        self.edges = edges
+        self.contours = contours
         return contours
+
+    ##  sort bead number using distance between y-axis(x = 0)
+    def sortXY(self, cX, cY):
+        n = len(cX)
+        index = np.argsort(cX)
+        cX = cX[index]
+        cY = cY[index]
+        self.radius_save = np.reshape(self.radius_save[index], (n,1))
+        self.saved_contours = self.saved_contours[index]
+        return cX, cY
 
     ##  get center point using moment of edge
     def getXY(self, contours):
+        cut = self.cut_image_width
         radius = []
         n_contours = len(contours)
         cX = []
         cY = []
+        saved_contours = []
+        perimeters = self.perimeters
+        areas = self.areas
         for i in range(n_contours):
             c = contours[i]
-            self.perimeters += [cv2.arcLength(c, True)]
-            self.areas += [cv2.contourArea(c)]
-            if (self.perimeters[-1] <= 6) | (self.areas[-1] <= 2) | (len(c) < 4):
+            perimeters += [cv2.arcLength(c, True)]
+            areas += [cv2.contourArea(c)]
+            if (perimeters[-1] <= 6) | (areas[-1] <= 2) | (len(c) < 4):
                 continue
-            radius += [self.areas[-1]/self.perimeters[-1]]
+            radius += [2 * areas[-1]/perimeters[-1]] ## r^2/2r = r/2
             M = cv2.moments(c)
             #(1 < radius[-1] < 5) & (M['m10'] != 0) & (M['m01'] != 0)
-            if (M['m00'] != 0):            
+            if (M['m00'] != 0) & (radius[-1]>1):
                 self.radius_save += [radius[-1]]
-                cX +=  [(M['m10'] / M['m00'])+32]
-                cY +=  [(M['m01'] / M['m00'])+18]   
+                saved_contours += [c]
+                cX +=  [(M['m10'] / M['m00'])+cut]
+                cY +=  [(M['m01'] / M['m00'])+cut]
+        self.saved_contours = saved_contours
         return cX, cY
 
     ## remove beads are too close, choose two image, refer to smaller bead#
@@ -201,6 +272,7 @@ class BinaryImage:
         cX = np.delete(cX1, i_dele)
         cY = np.delete(cY1, i_dele)
         self.radius_save = np.delete(self.radius_save, i_dele)
+        self.saved_contours = np.delete(self.saved_contours, i_dele)
         return cX, cY
         
     ##  get intensity of AOI
@@ -223,6 +295,7 @@ class BinaryImage:
         cX = np.delete(cX, i_dele)
         cY = np.delete(cY, i_dele)
         self.radius_save = np.delete(self.radius_save, i_dele)
+        self.saved_contours = np.delete(self.saved_contours, i_dele)
         intensity = np.delete(intensity, i_dele)
         return cX, cY
         
@@ -231,7 +304,7 @@ class BinaryImage:
         n = len(cX)
         for i in range(n):
             cv2.circle(image, (int(cX[i]), int(cY[i])), aoi_size, (255, 255, 255), 1)
-            cv2.putText(image, str(i+1), (int(cX[i]+10), int(cY[i]+10))
+            cv2.putText(image, str(i), (int(cX[i]+10), int(cY[i]+10))
                         , cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
         return image
     
@@ -266,59 +339,20 @@ class BinaryImage:
         return bounds
     
     ## get parameters for trackbead fitting
-    def preparefit_info(self, read_mode, frame_setread_num, frame_total, aoi_size = 20):
+    def preparefit_info(self, read_mode, frame_setread_num, frame_total):
         bead_number = self.bead_number
-        x_fit = self.x_fit
-        y_fit = self.y_fit
         initial_guess = [40,3,3,11,11,0,10]
-        parameters = [initial_guess] * bead_number
+        initial_guess_beads = [initial_guess] * bead_number
         if read_mode == 0:
             N = frame_setread_num
         else:
             N = frame_total
-        return x_fit, y_fit, initial_guess, parameters, N
+        return initial_guess, initial_guess_beads, N
     
-    def update_p0(self, p0_i, p0_f, i): #p0 is n by m matrix, n is bead number and m is 7, i=1,2,3,...
+    def update_p0(self, p0_i, p0_f, i): #p0 is n by m matrix, n is bead number and m is 7, i=0,1,2,3,...
+        i += 1
         p0 = (p0_i * i + p0_f)/(i+1)
         return p0
-       
-    ##  tracking bead position in a image, get all parameters and frame number
-    def trackbead(self, image, cX, cY, aoi_size, frame, p0):
-        para_fit = []
-        bounds = self.get_bounds(aoi_size)
-        x = self.x_fit
-        y = self.y_fit
-        parameters = self.parameters
-        for j in range(self.bead_number):
-            image_tofit, intensity = self.getAOI(image, cY[j], cX[j], aoi_size)
-            ## enhance contrast
-            # image_bead = image[horizontal-10:(horizontal+10), vertical-10:(vertical+10)] # [x,y] = [width, height]
-            # image_bead_bur = cv2.GaussianBlur(image_bead, (5, 5),2,2)
-            ## increase contrast
-            # enh_con = ImageEnhance.Contrast(Image.fromarray(image_bead_bur))
-            # contrast = 10
-            # image_contrasted = enh_con.enhance(contrast)
-            # image_tofit = np.array(image_contrasted)
-            try:
-                popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), p0[j], bounds=bounds)
-                ss_res = self.get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
-                # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
-                # data_fitted = twoD_Gaussian((x, y), *popt)
-                intensity_integral = 2*math.pi*popt[0]*popt[1]*popt[2]
-                para_fit += [
-                    [frame] + [j+1] + list(popt) + 
-                    [intensity] + [intensity_integral] + [ss_res]
-                             ]
-                parameters[j] = list(popt)
-                
-            except RuntimeError:
-                # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), initial_guess)
-                para_fit += [[frame] + [j+1]+[0,0,0,0,0,0,0,0,0,0]]
-                parameters[j] = self.initial_guess # initial guess for all beads
-            except:
-                para_fit += [[frame] + [j+1]+[0,0,0,0,0,0,0,0,0,0]]
-                parameters[j] = self.initial_guess
-        return para_fit, np.array(parameters)
     
 ###############################################################################
     ### methods for image reading    
@@ -326,13 +360,17 @@ class BinaryImage:
     def readGlimpse1(self, frame_i = 0):
         fileNumber = self.fileNumber[frame_i]
         offset = self.offset[frame_i]
+        size_a_image = self.size_a_image
+        data_type = self.data_type
+        height = self.height
+        width = self.width
         with open(self.path_data[fileNumber],'rb') as f:
             f.seek(offset)
-            data = f.read(self.size_a_image)    
-            decoded_data = struct.unpack('>' + str(self.size_a_image * 1) + self.data_type, data)
-            self.read1 = np.reshape(decoded_data, (self.height, self.width) )
-            self.image = self.read1
-        return self.read1
+            data = f.read(size_a_image)
+            decoded_data = struct.unpack('>' + str(size_a_image * 1) + data_type, data)
+            read1 = np.reshape(decoded_data, (height, width) )
+            # self.image = self.read1
+        return read1
     
     ##  read N image from frame_i (0,1,2,...,N-1)
     def readGlimpseN(self, frame_i = 0, N = 50):
@@ -346,8 +384,8 @@ class BinaryImage:
                 f.seek(offset)
                 data = f.read(self.size_a_image * frame)
                 decoded_data += struct.unpack('>' + str(self.size_a_image * frame) + self.data_type, data)
-        self.readN = np.reshape(decoded_data, (N, self.height, self.width) )
-        return self.readN
+        readN = np.reshape(decoded_data, (N, self.height, self.width) )
+        return readN
 
 ###############################################################################        
     ### methods for getting header information
@@ -380,7 +418,7 @@ class BinaryImage:
                       FramesAcquired) # There are 8 variables.
             self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value, 
                 PixelDepth.value, timeOf1stFrameSecSince1104.value]
-            # [frames, height, width, pixeldepth, avg fps]
+            ## header = [frames, height, width, pixeldepth, avg fps]
             return self.header
         else: # is linux
             df = pd.read_csv(self.path_header_txt, sep='\t', header=None)
@@ -388,23 +426,24 @@ class BinaryImage:
             header_values = df[1].to_numpy()
             self.header = [int(header_values[0]), int(header_values[2]), int(header_values[1]), int(header_values[4]), header_values[3]]
             [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.header
-            # [frames, height, width, pixeldepth, avg fps]
+            # header = [frames, height, width, pixeldepth, avg fps]
             return self.header
 
     def getdatainfo(self):       
         ### get file info.
-        if self.header[3] == 0: # 8 bit integer
-            self.data_type = 'B'
+        header = self.header
+        path_data = self.path_data
+        if header[3] == 0: # 8 bit integer
+            data_type = 'B'
             pixel_depth = 1
         else:
-            self.data_type = 'h'
+            data_type = 'h'
             pixel_depth = 2
-        self.size_a_image = self.header[1] * self.header[2] * pixel_depth  # 8bit format default
-        self.file_size = [Path(x).stat().st_size for x in self.path_data] 
-        self.frame_per_file = [int(x/self.size_a_image) for x in self.file_size]
-        self.frame_total = sum(self.frame_per_file) # cal frame number of this file
-        info = [self.frame_per_file, self.path_data, self.data_type, self.size_a_image]
-        return info
+        size_a_image = header[1] * header[2] * pixel_depth  # 8bit format default
+        file_size = [Path(x).stat().st_size for x in path_data]
+        frame_per_file = [int(x/size_a_image) for x in file_size]
+        self.data_type, self.size_a_image, self.frame_per_file = data_type, size_a_image, frame_per_file
+        return data_type, size_a_image, frame_per_file
 
     ##  get offset array
     def getoffset(self):
@@ -423,15 +462,15 @@ class BinaryImage:
             else:
                 a = 0
                 b += 1
-        # self.offset = offset
-        # self.fileNumber = fileNumber
         return offset, fileNumber   
 ###############################################################################
+
 ### Use for data saving and data reshaping
 class DataToSave:
     # data: np.array, path_folder: string path
-    def __init__(self, data, path_folder, avg_fps, window, factor_p2n):
+    def __init__(self, data, localization_results, path_folder, avg_fps, window, factor_p2n):
         self.columns = self.get_df_sheet_names()
+        self.localization_results = localization_results
         self.df = pd.DataFrame(data=data, columns=self.columns)
         self.path_folder = path_folder
         self.sheet_names = self.get_analyzed_sheet_names() + self.get_reshape_sheet_names()
@@ -443,35 +482,35 @@ class DataToSave:
         
     ##  save four files
     def Save_four_files(self):
-        self.save_fitresults_to_csv()
-        self.save_all_dict_df_to_excel()
-        self.save_selected_dict_df_to_excel()
-        self.save_removed_dict_df_to_excel()
+        random_string = self.gen_random_code(3)
+        self.save_fitresults_to_csv(random_string)
+        self.save_all_dict_df_to_excel(random_string)
+        self.save_selected_dict_df_to_excel(random_string)
+        self.save_removed_dict_df_to_excel(random_string)
   
     ##  save fitresults to csv
-    def save_fitresults_to_csv(self):
+    def save_fitresults_to_csv(self, random_string):
         df = self.df
         path_folder = self.path_folder
         filename_time = self.filename_time
-        
-        df.to_csv(os.path.join(path_folder, filename_time + '-fitresults.csv'), index=False)    
+        df.to_csv(os.path.join(path_folder, f'{filename_time}-{random_string}-fitresults.csv'), index=False)
     
     ##  save all dictionary of DataFrame to excel sheets
-    def save_all_dict_df_to_excel(self):
+    def save_all_dict_df_to_excel(self, random_string):
         df_reshape_analyzed = self.df_reshape_analyzed
         path_folder = self.path_folder
         filename_time = self.filename_time
         filename='fitresults_reshape_analyzed.xlsx'
         sheet_names = self.sheet_names
         
-        writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
+        writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
         for sheet_name in sheet_names:
             df_save = df_reshape_analyzed[sheet_name]
             df_save.to_excel(writer, sheet_name=sheet_name, index=True)
         writer.save()
     
     ##  save selected dictionary of DataFrame to excel sheets
-    def save_selected_dict_df_to_excel(self):
+    def save_selected_dict_df_to_excel(self, random_string):
         df_reshape_analyzed = self.df_reshape_analyzed
         path_folder = self.path_folder
         filename_time = self.filename_time
@@ -479,7 +518,7 @@ class DataToSave:
         criteria = self.get_criteria(df_reshape_analyzed)
         sheet_names = self.sheet_names     
         
-        writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
+        writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
         for sheet_name in sheet_names:
             df_save = df_reshape_analyzed[sheet_name]
             if sheet_name != 'avg_attrs' and sheet_name != 'std_attrs':
@@ -490,7 +529,7 @@ class DataToSave:
         writer.save()
     
     ##  save removed dictionary of DataFrame to excel sheets
-    def save_removed_dict_df_to_excel(self):
+    def save_removed_dict_df_to_excel(self, random_string):
         df_reshape_analyzed = self.df_reshape_analyzed
         path_folder = self.path_folder
         filename_time = self.filename_time
@@ -498,7 +537,7 @@ class DataToSave:
         criteria = self.get_criteria(df_reshape_analyzed)
         sheet_names = self.sheet_names
         
-        writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{filename}'))
+        writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
         for sheet_name in sheet_names:
             df_save = df_reshape_analyzed[sheet_name]
             if sheet_name != 'avg_attrs' and sheet_name != 'std_attrs':
@@ -527,7 +566,7 @@ class DataToSave:
         # save data to dictionary of DataFrame
         for data, sheet_name in zip(analyzed_data, analyzed_sheet_names):
             if sheet_name == 'avg_attrs':
-                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_analyzed_sheet_names()[:-2]+self.get_reshape_sheet_names()).set_index(self.get_columns('bead', data.shape[0])[1:])
+                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_analyzed_sheet_names()[:-2]+self.get_reshape_sheet_names()+['bead_radius']).set_index(self.get_columns('bead', data.shape[0])[1:])
             elif sheet_name == 'std_attrs':
                 df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_analyzed_sheet_names()[:-2]+self.get_reshape_sheet_names()).set_index(self.get_columns('bead', data.shape[0])[1:])
             else:
@@ -543,6 +582,7 @@ class DataToSave:
         data_analyzed_avg, data_analyzed_std = self.avg_std_operator(BMx_sliding, BMx_fixing, BMy_sliding, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2])    
         data_reshaped_avg, data_reshaped_std = self.df_reshape_avg_std_operator(self.df_reshape)
         #append data or time together
+        data_reshaped_avg = np.append(data_reshaped_avg, self.localization_results, axis=1)
         data_avg_2D = np.append(data_analyzed_avg, data_reshaped_avg, axis=1)
         data_std_2D = np.append(data_analyzed_std, data_reshaped_std, axis=1)
         analyzed_data = [BMx_sliding, BMy_sliding, BMx_fixing, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2]]
@@ -681,7 +721,13 @@ class DataToSave:
     ##  get df sheet names(tracking_results)
     def get_df_sheet_names(self):
         return ['frame', 'aoi', 'amplitude', 'sx', 'sy', 'x', 'y', 'theta_deg', 'offset', 'intensity', 'intensity_integral', 'ss_res']
-    
+
+    ##  add 2n-word random texts(n-word number and n-word letter)
+    def gen_random_code(self, n):
+        digits = "".join([random.choice(string.digits) for i in range(n)])
+        chars = "".join([random.choice(string.ascii_letters ) for i in range(n)])
+        return digits + chars
+
 
 ###  2-D Gaussian function with rotation angle
 def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
@@ -825,8 +871,9 @@ if __name__ == "__main__":
                         frame_read_forcenter = frame_read_forcenter, N_loc = N_loc,
                         contrast = contrast, low = low, high = high, blacklevel = blacklevel)
     image, cX, cY = Glimpse_data.Localize() # localize beads
-    result_saved, time_axis = Glimpse_data.Track_All_Frames(read_mode, frame_setread_num)
-    Save_df = DataToSave(result_saved, path_folder, Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)
+    localization_results = Glimpse_data.radius_save
+    tracking_results = Glimpse_data.Track_All_Frames(read_mode, frame_setread_num)
+    Save_df = DataToSave(tracking_results, localization_results, path_folder, Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)
     Save_df.Save_four_files()
     
     time_spent = time.time() - t1
