@@ -29,16 +29,14 @@ import pandas as pd
 import tkinter as tk
 from tkinter import filedialog
 
-### setting parameters
-# path_folder = r'F:\YCC\20210205\4-1895bp\2-200ms-440uM_BME_gain20'
 
 # size_tofit = 10
-read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
-frame_setread_num = 50 # only useful when mode = 0, can't exceed frame number of a file
-
+read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+frame_setread_num = 0 # only useful when mode = 0, can't exceed frame number of a file
 # fit_mode = 'multiprocessing' #'multiprocessing'
 path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
 
+### set data folder
 if path_mode == 'm':
     root = tk.Tk()
     root.withdraw()
@@ -46,15 +44,14 @@ if path_mode == 'm':
 else:
     path_folder = r'F:\YCC\20210205\4-1895bp\2-200ms-440uM_BME_gain20'
 
-criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
+criteria_dist = 30 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
 frame_read_forcenter = 0 # no need to change, frame to autocenter beads
 N_loc = 40 # number of frame to stack and localization
-contrast = 15
+contrast = 12
 low = 40
 high = 120
-blacklevel = 40
-
+blacklevel = 30
 
 ### define a class for all glimpse data
 class BinaryImage:
@@ -69,7 +66,6 @@ class BinaryImage:
         [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
         self.data_type, self.size_a_image, self.frame_per_file = self.getdatainfo()
         # self.time_axis = np.arange(0, self.frames_acquired)/self.avg_fps
-
         self.criteria_dist = criteria_dist
         self.aoi_size = aoi_size
         self.frame_read_forcenter = frame_read_forcenter
@@ -79,9 +75,7 @@ class BinaryImage:
         self.high = high
         self.blacklevel = blacklevel
         self.offset, self.fileNumber = self.getoffset()
-
         self.cut_image_width = 30
-
         # self.read1 = [] # one image at i
         self.readN = self.readGlimpseN(frame_read_forcenter, N_loc) # N image from i
         self.contours = []
@@ -98,11 +92,12 @@ class BinaryImage:
         # self.AOIimage = []
         self.x_fit = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
         self.y_fit = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-
         self.bead_number = 0
-        self.initial_guess = [40,3,3,11,11,0,10]
-        self.initial_guess_beads = []
+        self.initial_guess = [40.,3.,3.,11.,11.,0.,10.]
+        self.initial_guess_beads = np.empty(0)
         self.N = 0
+        self.dx_localization = np.empty(0)
+        self.dy_localization = np.empty(0)
         
      
 ###########################################################################        
@@ -113,12 +108,17 @@ class BinaryImage:
         image = self.enhance_contrast(image, self.contrast)
         contours = self.getContour(image, self.low, self.high)
         cX, cY = self.getXY(contours)
-        cX, cY = self.removeXY(cX, cY, self.criteria_dist)
+        # cX, cY = self.removeXY(cX, cY, self.criteria_dist)
         intensity = self.getintensity(image, cX, cY, self.aoi_size)
         cX, cY = self.removeblack(cX, cY, intensity, blacklevel)
+        # cX, cY = self.removeXY(cX, cY, self.criteria_dist)
+        cX, cY = self.select_XY(cX, cY, self.criteria_dist)
         cX, cY = self.sortXY(cX, cY)
+
+        cX, cY = self.get_accurate_xy(image, cX, cY)
         self.cX = cX
         self.cY = cY
+
         self.bead_number = len(cX)
         image = self.drawAOI(image, cX, cY, self.aoi_size)
         self.show_grayimage(image, save = True)
@@ -132,29 +132,42 @@ class BinaryImage:
         frames_acquired = self.frames_acquired
         aoi_size = self.aoi_size
         initial_guess, initial_guess_beads, N = self.preparefit_info(read_mode, frame_setread_num, frames_acquired)
-        self.initial_guess_beads = initial_guess_beads
-        p0_1 = np.array(initial_guess_beads) # initialize fitting parameters for each bead
+        # self.initial_guess_beads = initial_guess_beads
+        p0_1 = initial_guess_beads # initialize fitting parameters for each bead
         result = []
         for i in range(N):
             image = self.readGlimpse1(i)
-            data, p0_2 = self.trackbead(image, cX, cY, aoi_size, i, p0_1)
+            data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1)
             p0_1 = self.update_p0(p0_1, p0_2, i) # update fitting initial guess
             result += data
             print(f'frame {i}')
         self.initial_guess_beads = p0_1
         result_saved = np.array(result)
         return result_saved
-    
 
 ###############################################################################
-    ##  tracking bead position in a image, get all parameters and frame number
-    def trackbead(self, image, cX, cY, aoi_size, frame, p0):
+    ##  get accurate position using Gaussian fit
+    def get_accurate_xy(self, image, cX, cY):
+        aoi_size = self.aoi_size
+        initial_guess_beads = np.array([self.initial_guess] * len(cX))
+        data, popt_beads = self.trackbead(image, cX, cY, aoi_size, frame=0, initial_guess_beads=initial_guess_beads)
+        x = popt_beads[:,3]
+        y = popt_beads[:,4]
+        self.dx_localization = x - 10
+        self.dy_localization = y - 10
+        self.initial_guess_beads = popt_beads
+        cX = cX + self.dx_localization
+        cY = cY + self.dy_localization
+        return cX, cY
+
+    ##  tracking position of all beads in a image, get all parameters and frame number
+    def trackbead(self, image, cX, cY, aoi_size, frame, initial_guess_beads):
         bead_number = len(cX)
-        para_fit = []
+        data = []
         bounds = self.get_bounds(aoi_size)
         x = self.x_fit
         y = self.y_fit
-        initial_guess_beads = self.initial_guess_beads
+        # initial_guess_beads = self.initial_guess_beads
         initial_guess = self.initial_guess
         for j in range(bead_number):
             image_tofit, intensity = self.getAOI(image, cY[j], cX[j], aoi_size)
@@ -171,25 +184,26 @@ class BinaryImage:
             # image_contrasted = enh_con.enhance(contrast)
             # image_tofit = np.array(image_contrasted)
             try:
-                popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), p0[j], bounds=bounds)
+                popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), initial_guess_beads[j, :], bounds=bounds)
                 ss_res = self.get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
                 # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
                 # data_fitted = twoD_Gaussian((x, y), *popt)
                 intensity_integral = 2 * math.pi * popt[0] * popt[1] * popt[2]
-                para_fit += [
+                data += [
                     [frame] + [j + 1] + list(popt) +
                     [intensity] + [intensity_integral] + [ss_res]
                 ]
-                initial_guess_beads[j] = list(popt)
-
+                # initial_guess_beads[j] = list(popt)
+                initial_guess_beads[j, :] = popt
             except RuntimeError:
                 # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), initial_guess)
-                para_fit += [[frame] + [j + 1] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
-                initial_guess_beads[j] = initial_guess  # initial guess for all beads
+                data += [[frame] + [j + 1] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+                initial_guess_beads[j, :] = np.array(initial_guess)  # initial guess for all beads
             except:
-                para_fit += [[frame] + [j + 1] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
-                initial_guess_beads[j] = initial_guess
-        return para_fit, np.array(initial_guess_beads)
+                data += [[frame] + [j + 1] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+                initial_guess_beads[j, :] = np.array(initial_guess)
+        popt_beads = np.array(initial_guess_beads)
+        return data, popt_beads
 
     ### methods for localization
     ##  stack multiple images    
@@ -214,7 +228,7 @@ class BinaryImage:
         image_cut = np.uint8(image[0+cut:self.height-cut, 0+cut:self.width-cut])
         edges = cv2.Canny(image_cut, low, high) # cv2.Canny(image, a, b), reject value < a and detect value > b
         # ret, thresh = cv2.threshold(self.edges, 0, 50, cv2.THRESH_BINARY) # THRESH_BINARY: transform into black/white depending on low/high value
-        contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         self.edges = edges
         self.contours = contours
         return contours
@@ -243,18 +257,39 @@ class BinaryImage:
             c = contours[i]
             perimeters += [cv2.arcLength(c, True)]
             areas += [cv2.contourArea(c)]
-            if (perimeters[-1] <= 6) | (areas[-1] <= 2) | (len(c) < 4):
-                continue
+            # if (perimeters[-1] <= 0) | (areas[-1] <= 0) | (len(c) < 2):
+            if (perimeters[-1] == 0):
+                continue ## ingore code below
             radius += [2 * areas[-1]/perimeters[-1]] ## r^2/2r = r/2
             M = cv2.moments(c)
-            #(1 < radius[-1] < 5) & (M['m10'] != 0) & (M['m01'] != 0)
-            if (M['m00'] != 0) & (radius[-1]>1):
+            # if (M['m00'] != 0) & (radius[-1] > 1):
+            if (M['m00'] != 0):
+
                 self.radius_save += [radius[-1]]
                 saved_contours += [c]
                 cX +=  [(M['m10'] / M['m00'])+cut]
                 cY +=  [(M['m01'] / M['m00'])+cut]
         self.saved_contours = saved_contours
         return cX, cY
+
+    def select_XY(self, cX, cY, criteria):
+        cX1 = np.array(cX)
+        cY1 = np.array(cY)
+        n = len(cX1)
+        cX_selected = []
+        cY_selected = []
+        avg = 0
+        for i in range(n):
+            dx = cX1 - cX1[i]
+            dy = cY1 - cY1[i]
+            dr = np.sqrt(dx**2 + dy**2)
+            index_cluster = dr < criteria
+            if avg != np.mean(cX1[index_cluster]):
+                cX_selected += [np.mean(cX1[index_cluster])]
+                cY_selected += [np.mean(cY1[index_cluster])]
+                avg = np.mean(cX1[index_cluster])
+        return np.array(cX_selected), np.array(cY_selected)
+
 
     ## remove beads are too close, choose two image, refer to smaller bead#
     def removeXY(self, cX, cY, criteria): 
@@ -265,8 +300,6 @@ class BinaryImage:
             dx = cX1 - cX1[i]
             dy = cY1 - cY1[i]
             dr = np.sqrt(dx**2 + dy**2)
-            # i_dr = np.argsort(dr)
-            # i_XYr_self = i_dr[0]
             if any(dr[dr != 0] <= criteria):
                 i_dele = np.append(i_dele, int(i))                
         cX = np.delete(cX1, i_dele)
@@ -275,9 +308,9 @@ class BinaryImage:
         self.saved_contours = np.delete(self.saved_contours, i_dele)
         return cX, cY
         
-    ##  get intensity of AOI
+    ##  get avg intensity of all AOI(20 * 20 pixel)
     def getintensity(self, image, cX, cY, aoi_size = 20): # i: bead number: 1,2,3,...,N
-        half_size = int(aoi_size/2)    
+        half_size = int(aoi_size/4)
         intensity = []
         for i in range(len(cX)):
             horizontal = int(cY[i]) # width
@@ -341,8 +374,8 @@ class BinaryImage:
     ## get parameters for trackbead fitting
     def preparefit_info(self, read_mode, frame_setread_num, frame_total):
         bead_number = self.bead_number
-        initial_guess = [40,3,3,11,11,0,10]
-        initial_guess_beads = [initial_guess] * bead_number
+        initial_guess = self.initial_guess
+        initial_guess_beads = self.initial_guess_beads
         if read_mode == 0:
             N = frame_setread_num
         else:
@@ -420,7 +453,7 @@ class BinaryImage:
                 PixelDepth.value, timeOf1stFrameSecSince1104.value]
             ## header = [frames, height, width, pixeldepth, avg fps]
             return self.header
-        else: # is linux
+        else: # is linux or others
             df = pd.read_csv(self.path_header_txt, sep='\t', header=None)
             # header_columns = df[0].to_numpy()
             header_values = df[1].to_numpy()
@@ -727,7 +760,6 @@ class DataToSave:
         digits = "".join([random.choice(string.digits) for i in range(n)])
         chars = "".join([random.choice(string.ascii_letters ) for i in range(n)])
         return digits + chars
-
 
 ###  2-D Gaussian function with rotation angle
 def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
