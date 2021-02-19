@@ -12,7 +12,7 @@ import math
 import random
 import string
 from sys import platform
-import multiprocessing as mp
+# import multiprocessing as mp
 import ctypes
 import struct
 import numpy as np
@@ -23,16 +23,17 @@ import os
 from glob import glob
 import datetime
 from PIL import Image,ImageEnhance
-from multiprocessing import freeze_support
+# from multiprocessing import freeze_support
 import time
 import pandas as pd
 import tkinter as tk
 from tkinter import filedialog
+import io
 
 
 # size_tofit = 10
-read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
-frame_setread_num = 0 # only useful when mode = 0, can't exceed frame number of a file
+read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+frame_setread_num = 40 # only useful when mode = 0, can't exceed frame number of a file
 # fit_mode = 'multiprocessing' #'multiprocessing'
 path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
 
@@ -82,6 +83,7 @@ class BinaryImage:
         self.saved_contours = []
         self.edges = []
         self.image = self.stackimageN(self.readN) # image used to be localized
+        self.image_aoi = []
         self.cX = []
         self.cY = []
         self.perimeters = []
@@ -98,6 +100,7 @@ class BinaryImage:
         self.N = 0
         self.dx_localization = np.empty(0)
         self.dy_localization = np.empty(0)
+        self.tracking_results = []
         
      
 ###########################################################################        
@@ -111,17 +114,16 @@ class BinaryImage:
         # cX, cY = self.removeXY(cX, cY, self.criteria_dist)
         intensity = self.getintensity(image, cX, cY, self.aoi_size)
         cX, cY = self.removeblack(cX, cY, intensity, blacklevel)
-        # cX, cY = self.removeXY(cX, cY, self.criteria_dist)
-        cX, cY = self.select_XY(cX, cY, self.criteria_dist)
+        ##  need to sort according to X first and select
         cX, cY = self.sortXY(cX, cY)
-
+        cX, cY = self.select_XY(cX, cY, self.criteria_dist)
         cX, cY = self.get_accurate_xy(image, cX, cY)
-        self.cX = cX
-        self.cY = cY
 
         self.bead_number = len(cX)
         image = self.drawAOI(image, cX, cY, self.aoi_size)
         self.show_grayimage(image, save = True)
+        self.cX = cX
+        self.cY = cY
         print('finish centering')
         return image, cX, cY
     
@@ -134,17 +136,45 @@ class BinaryImage:
         initial_guess, initial_guess_beads, N = self.preparefit_info(read_mode, frame_setread_num, frames_acquired)
         # self.initial_guess_beads = initial_guess_beads
         p0_1 = initial_guess_beads # initialize fitting parameters for each bead
-        result = []
+        tracking_results_list = []
         for i in range(N):
             image = self.readGlimpse1(i)
             data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1)
             p0_1 = self.update_p0(p0_1, p0_2, i) # update fitting initial guess
-            result += data
+            tracking_results_list += data
             print(f'frame {i}')
         self.initial_guess_beads = p0_1
-        result_saved = np.array(result)
-        return result_saved
+        tracking_results = np.array(tracking_results_list)
+        self.tracking_results = tracking_results
+        return tracking_results
 
+
+    ##  main for getting fit-video of an aoi
+    def Get_fitting_video_offline(self, selected_aoi, frame_i, N):
+        tracking_results = self.tracking_results
+        cX = self.cX
+        cY = self.cY
+        x = self.x_fit
+        y = self.y_fit
+        path_folder = self.path_folder
+        tracking_results_select = self.get_aoi_from_tracking_results(tracking_results, selected_aoi)
+        imageN = self.readGlimpseN(frame_i, N=N)
+        fourcc = cv2.VideoWriter_fourcc(*'H264')
+        output_movie = cv2.VideoWriter(os.path.abspath(path_folder) + '/fitting.mp4', fourcc, 5.0, (1200, 800))
+        for image,tracking_result_select in zip(imageN,tracking_results_select):
+            image_aoi, intensity = self.getAOI(image, cY[selected_aoi], cX[selected_aoi], aoi_size)
+            para_fit = tracking_result_select[2:9]
+            data_fitted = twoD_Gaussian((x, y), *para_fit)
+            fig, ax = plt.subplots(1, 1)
+            ax.imshow(image_aoi, cmap=plt.cm.gray, origin='lower',
+                      extent=(x.min(), x.max(), y.min(), y.max()))
+            ax.contour(x, y, data_fitted.reshape(20, 20), 5, colors='r')
+            # ax.contour(x, y, data_fitted.reshape(20, 20), 5)
+            plot_img_np = self.get_img_from_fig(fig)
+            output_movie.write(plot_img_np)
+        self.image_aoi = image_aoi
+        output_movie.release()
+        
 ###############################################################################
     ##  get accurate position using Gaussian fit
     def get_accurate_xy(self, image, cX, cY):
@@ -190,17 +220,17 @@ class BinaryImage:
                 # data_fitted = twoD_Gaussian((x, y), *popt)
                 intensity_integral = 2 * math.pi * popt[0] * popt[1] * popt[2]
                 data += [
-                    [frame] + [j + 1] + list(popt) +
+                    [frame] + [j] + list(popt) +
                     [intensity] + [intensity_integral] + [ss_res]
                 ]
                 # initial_guess_beads[j] = list(popt)
                 initial_guess_beads[j, :] = popt
             except RuntimeError:
                 # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y],image_tofit.ravel(), initial_guess)
-                data += [[frame] + [j + 1] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+                data += [[frame] + [j] + [0.]*10]
                 initial_guess_beads[j, :] = np.array(initial_guess)  # initial guess for all beads
             except:
-                data += [[frame] + [j + 1] + [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+                data += [[frame] + [j] + [0.]*10]
                 initial_guess_beads[j, :] = np.array(initial_guess)
         popt_beads = np.array(initial_guess_beads)
         return data, popt_beads
@@ -283,11 +313,15 @@ class BinaryImage:
             dx = cX1 - cX1[i]
             dy = cY1 - cY1[i]
             dr = np.sqrt(dx**2 + dy**2)
-            index_cluster = dr < criteria
-            if avg != np.mean(cX1[index_cluster]):
-                cX_selected += [np.mean(cX1[index_cluster])]
-                cY_selected += [np.mean(cY1[index_cluster])]
-                avg = np.mean(cX1[index_cluster])
+            i_self = (dr!=-10)
+            index_cluster = dr[i_self] < criteria
+            cX2 = cX1[i_self]
+            cY2 = cY1[i_self]
+            if avg != np.mean(cX2[index_cluster]):
+                cX_selected += [np.mean(cX2[index_cluster])]
+                cY_selected += [np.mean(cY2[index_cluster])]
+                avg = np.mean(cX2[index_cluster])
+
         return np.array(cX_selected), np.array(cY_selected)
 
 
@@ -347,6 +381,34 @@ class BinaryImage:
         plt.imshow(image, cmap='gray', vmin=0, vmax=255)
         if save == True:
             cv2.imwrite(os.path.join(self.path_folder, 'output.png'), image)
+###############################################################################
+    ### method for making video of certain aoi, tracking_results: list array
+
+
+    ##  get tracking result for assigned aoi
+    def get_aoi_from_tracking_results(self, tracking_results, selected_aoi):
+        # frame_i = int(min(tracking_results[:,0]))
+        frame_acquired = int(max(tracking_results[:,0]) + 1)
+        bead_number = int(max(tracking_results[:, 1]) + 1)
+        tracking_results_list = list(tracking_results)
+        indices_select = [x*bead_number+selected_aoi for x in range(frame_acquired)]
+        tracking_results_select = []
+        for i in indices_select:
+            tracking_results_select += [tracking_results_list[i]]
+        return np.array(tracking_results_select)
+    
+    ## define a function which returns an image as numpy array from figure
+    def get_img_from_fig(self, fig, dpi=200):
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=dpi)
+        buf.seek(0)
+        img_arr = np.frombuffer(buf.getvalue(), dtype=np.uint8)
+        buf.close()
+        img = cv2.imdecode(img_arr, 1)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) #cv2.COLOR_BGR2RGB
+        return img
+
+
 
 ###############################################################################           
     ### methods for tracking beads
@@ -697,7 +759,7 @@ class DataToSave:
 
     ## get reshape data all
     def get_reshape_data(self, df, avg_fps, window = 20):
-        bead_number = int(max(df['aoi']))
+        bead_number = int(max(df['aoi'])+1)
         frame_acquired = int(len(df['x'])/bead_number)
         df_reshape = dict()
         dt = window/2/avg_fps
@@ -899,14 +961,16 @@ def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
 if __name__ == "__main__":
     t1 = time.time()
     
-    Glimpse_data = BinaryImage(path_folder, criteria_dist = criteria_dist, aoi_size = aoi_size,
-                        frame_read_forcenter = frame_read_forcenter, N_loc = N_loc,
-                        contrast = contrast, low = low, high = high, blacklevel = blacklevel)
+    Glimpse_data = BinaryImage(path_folder, criteria_dist=criteria_dist, aoi_size=aoi_size,
+                        frame_read_forcenter=frame_read_forcenter, N_loc=N_loc,
+                        contrast=contrast, low=low, high=high, blacklevel=blacklevel)
     image, cX, cY = Glimpse_data.Localize() # localize beads
     localization_results = Glimpse_data.radius_save
     tracking_results = Glimpse_data.Track_All_Frames(read_mode, frame_setread_num)
-    Save_df = DataToSave(tracking_results, localization_results, path_folder, Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)
-    Save_df.Save_four_files()
+    Glimpse_data.Get_fitting_video_offline(selected_aoi=15, frame_i=0, N=20)
+    
+    # Save_df = DataToSave(tracking_results, localization_results, path_folder, Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)
+    # Save_df.Save_four_files()
     
     time_spent = time.time() - t1
     print('spent ' + str(time_spent) + ' s')
