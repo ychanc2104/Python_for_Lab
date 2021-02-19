@@ -30,9 +30,8 @@ import tkinter as tk
 from tkinter import filedialog
 import io
 
-
 # size_tofit = 10
-read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
 frame_setread_num = 40 # only useful when mode = 0, can't exceed frame number of a file
 # fit_mode = 'multiprocessing' #'multiprocessing'
 path_mode = 'm' # 'a': auto-pick cd, 'm': manually select
@@ -309,6 +308,7 @@ class BinaryImage:
         cX_selected = []
         cY_selected = []
         avg = 0
+        index = []
         for i in range(n):
             dx = cX1 - cX1[i]
             dy = cY1 - cY1[i]
@@ -321,9 +321,10 @@ class BinaryImage:
                 cX_selected += [np.mean(cX2[index_cluster])]
                 cY_selected += [np.mean(cY2[index_cluster])]
                 avg = np.mean(cX2[index_cluster])
-
+                index += [i]
+        self.radius_save = self.radius_save[index]
+        self.saved_contours = self.saved_contours[index]
         return np.array(cX_selected), np.array(cY_selected)
-
 
     ## remove beads are too close, choose two image, refer to smaller bead#
     def removeXY(self, cX, cY, criteria): 
@@ -383,8 +384,6 @@ class BinaryImage:
             cv2.imwrite(os.path.join(self.path_folder, 'output.png'), image)
 ###############################################################################
     ### method for making video of certain aoi, tracking_results: list array
-
-
     ##  get tracking result for assigned aoi
     def get_aoi_from_tracking_results(self, tracking_results, selected_aoi):
         # frame_i = int(min(tracking_results[:,0]))
@@ -407,8 +406,6 @@ class BinaryImage:
         img = cv2.imdecode(img_arr, 1)
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY) #cv2.COLOR_BGR2RGB
         return img
-
-
 
 ###############################################################################           
     ### methods for tracking beads
@@ -570,7 +567,7 @@ class DataToSave:
         self.path_folder = path_folder
         self.sheet_names = self.get_analyzed_sheet_names() + self.get_reshape_sheet_names()
         self.filename_time = self.get_date()
-        self.bead_number = int(max(self.df['aoi']))
+        self.bead_number = int(max(1 + self.df['aoi']))
         self.frame_acquired = int(len(self.df['x'])/self.bead_number)
         self.df_reshape = self.get_reshape_data(self.df, avg_fps, window)
         self.df_reshape_analyzed = self.get_analyzed_data(self.df_reshape, window, avg_fps, factor_p2n)
@@ -967,10 +964,9 @@ if __name__ == "__main__":
     image, cX, cY = Glimpse_data.Localize() # localize beads
     localization_results = Glimpse_data.radius_save
     tracking_results = Glimpse_data.Track_All_Frames(read_mode, frame_setread_num)
-    Glimpse_data.Get_fitting_video_offline(selected_aoi=15, frame_i=0, N=20)
-    
-    # Save_df = DataToSave(tracking_results, localization_results, path_folder, Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)
-    # Save_df.Save_four_files()
+    # Glimpse_data.Get_fitting_video_offline(selected_aoi=15, frame_i=0, N=20)
+    Save_df = DataToSave(tracking_results, localization_results, path_folder, avg_fps=Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)
+    Save_df.Save_four_files()
     
     time_spent = time.time() - t1
     print('spent ' + str(time_spent) + ' s')
