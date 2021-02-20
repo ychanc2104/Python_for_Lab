@@ -626,7 +626,7 @@ class DataToSave:
         writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
         for sheet_name in sheet_names:
             df_save = df_reshape_analyzed[sheet_name]
-            if sheet_name != 'avg_attrs' and sheet_name != 'std_attrs':
+            if sheet_name != 'med_attrs' and sheet_name != 'avg_attrs' and sheet_name != 'std_attrs'  :
                 df_save_selected = df_save.T[criteria].T
             else: # for avg_attrs and std_attrs sheets
                 df_save_selected = df_save[criteria]
@@ -645,7 +645,7 @@ class DataToSave:
         writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
         for sheet_name in sheet_names:
             df_save = df_reshape_analyzed[sheet_name]
-            if sheet_name != 'avg_attrs' and sheet_name != 'std_attrs':
+            if sheet_name != 'med_attrs' and sheet_name != 'avg_attrs' and sheet_name != 'std_attrs':
                 df_save_selected = df_save.T[~criteria].T
             else: # for avg_attrs and std_attrs sheets
                 df_save_selected = df_save[~criteria]
@@ -671,9 +671,9 @@ class DataToSave:
         # save data to dictionary of DataFrame
         for data, sheet_name in zip(analyzed_data, analyzed_sheet_names):
             if sheet_name == 'avg_attrs':
-                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_analyzed_sheet_names()[:-2]+self.get_reshape_sheet_names()+['bead_radius']).set_index(self.get_columns('bead', data.shape[0])[1:])
-            elif sheet_name == 'std_attrs':
-                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_analyzed_sheet_names()[:-2]+self.get_reshape_sheet_names()).set_index(self.get_columns('bead', data.shape[0])[1:])
+                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_analyzed_sheet_names()[:-3]+self.get_reshape_sheet_names()+['bead_radius']).set_index(self.get_columns('bead', data.shape[0])[1:])
+            elif sheet_name == 'std_attrs' or sheet_name == 'med_attrs':
+                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_analyzed_sheet_names()[:-3]+self.get_reshape_sheet_names()).set_index(self.get_columns('bead', data.shape[0])[1:])
             else:
                 df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_columns(sheet_name, bead_number)).set_index('time')
         return df_reshape_analyzed
@@ -684,15 +684,16 @@ class DataToSave:
         BMy_sliding, BMy_fixing = self.calBM_2D(y_2D, avg_fps, factor_p2n=factor_p2n)
         sx_sy = sx_2D * sy_2D
         xy_ratio = self.get_xy_ratio([BMx_sliding, BMy_sliding], [BMx_fixing, BMy_fixing], [sx_2D**2, sy_2D**2])
-        data_analyzed_avg, data_analyzed_std = self.avg_std_operator(BMx_sliding, BMx_fixing, BMy_sliding, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2])    
-        data_reshaped_avg, data_reshaped_std = self.df_reshape_avg_std_operator(self.df_reshape)
+        data_analyzed_med, data_analyzed_avg, data_analyzed_std = self.avg_std_operator(BMx_sliding, BMx_fixing, BMy_sliding, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2])
+        data_reshaped_med, data_reshaped_avg, data_reshaped_std = self.df_reshape_avg_std_operator(self.df_reshape)
         #append data or time together
         data_reshaped_avg = np.append(data_reshaped_avg, self.localization_results, axis=1)
+        data_med_2D = np.append(data_analyzed_med, data_reshaped_med, axis=1)
         data_avg_2D = np.append(data_analyzed_avg, data_reshaped_avg, axis=1)
         data_std_2D = np.append(data_analyzed_std, data_reshaped_std, axis=1)
         analyzed_data = [BMx_sliding, BMy_sliding, BMx_fixing, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2]]
         analyzed_data = self.append_time(analyzed_data, avg_fps, frame_acquired, window=20)
-        analyzed_data = analyzed_data + [data_avg_2D, data_std_2D]
+        analyzed_data = analyzed_data + [data_med_2D, data_avg_2D, data_std_2D]
         return data_avg_2D, data_std_2D, analyzed_data
 
     ### data:1D numpy array for a bead, BM: 1D numpy array
@@ -734,28 +735,38 @@ class DataToSave:
     
     ##  data average operator for multiple columns(2D-array), output: (r,c)=(beads,attrs)
     def avg_std_operator(self, *args):
+        data_med_2D = []
         data_avg_2D = []
         data_std_2D = []
         for data_2D in args:
+            data_med = []
             data_avg = []
             data_std = []
             for data in data_2D.T:
+                data_med += [np.median(data, axis=0)]
                 data_avg += [np.mean(data, axis=0)]
                 data_std += [np.std(data, axis=0, ddof=1)]
+            data_med_2D += [np.array(data_med)]
             data_avg_2D += [np.array(data_avg)]
             data_std_2D += [np.array(data_std)]
-        return np.nan_to_num(data_avg_2D).T, np.nan_to_num(data_std_2D).T    
-    
+        return np.nan_to_num(data_med_2D).T, np.nan_to_num(data_avg_2D).T, np.nan_to_num(data_std_2D).T
+
+
+
+
+
     ##  get avg and std for reshaped DataFrame
     def df_reshape_avg_std_operator(self, df_reshape):
+        data_med = []
         data_avg = []
         data_std = []
         for i, sheet_name in enumerate(self.columns):
             if i >1:
                 data = np.array(df_reshape[sheet_name])
+                data_med += [np.median(data, axis=0)]
                 data_avg += [np.mean(data, axis=0)]
                 data_std += [np.std(data, axis=0, ddof=1)]
-        return np.array(data_avg).T, np.array(data_std).T       
+        return np.array(data_med).T, np.array(data_avg).T, np.array(data_std).T
     
     ##  get x, y, sx, sy, bead_number, frame_acquired from df_reshape
     def get_pre_analyzed_data(self, df_reshape):
@@ -813,11 +824,11 @@ class DataToSave:
         filename_time = datetime.datetime.today().strftime('%Y-%m-%d') # yy-mm-dd
         return filename_time
     
-    ### get analyzed sheet names
+    ### get analyzed sheet names, add median
     def get_analyzed_sheet_names(self):
         return ['BMx_sliding', 'BMy_sliding', 'BMx_fixing', 'BMy_fixing', 
                 'sx_sy', 'xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared',
-                'avg_attrs', 'std_attrs']
+                'med_attrs', 'avg_attrs', 'std_attrs']
       
     ### get reshape sheet names
     def get_reshape_sheet_names(self):
