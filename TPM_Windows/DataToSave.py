@@ -169,10 +169,10 @@ class DataToSave:
             BM_f = []
             for i in range(iteration):
                 data_pre = data[i * window: (i + 1) * window]
-            try:
-                BM_f += [factor_p2n * np.std(data_pre[data_pre > 0], ddof=1)]
-            except:
-                BM_f += [0]
+                try:
+                    BM_f += [factor_p2n * np.std(data_pre[data_pre > 0], ddof=1)]
+                except:
+                    BM_f += [0]
             BM = BM_f
         return np.array(BM)
 
@@ -188,13 +188,12 @@ class DataToSave:
         BM_fixing = np.array(BM_fixing).T
         return BM_sliding, BM_fixing
 
-        ##  cal ratio fo a len=2 list ratio
-
+    ##  cal ratio fo a len=2 list ratio
     def get_xy_ratio(self, *args):
         xy_ratio = []
         for data in args:
             ratio = data[0] / data[1]
-            ratio[ratio > 99999] = 99999
+            ratio[ratio > 99999] = 0
             xy_ratio += [ratio.astype('float32')]
         return xy_ratio
 
