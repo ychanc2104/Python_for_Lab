@@ -159,14 +159,20 @@ class DataToSave:
             BM_s = []
             for i in range(iteration):
                 data_pre = data[i: i + window]
-                BM_s += [factor_p2n * np.std(data_pre[data_pre > 0], ddof=1)]
+                try:
+                    BM_s += [factor_p2n * np.std(data_pre[data_pre > 0], ddof=1)]
+                except:
+                    BM_s += [0]
             BM = BM_s
         else:  # fix, non-overlapping
             iteration = int(len(data) / window)  # fix window
             BM_f = []
             for i in range(iteration):
                 data_pre = data[i * window: (i + 1) * window]
+            try:
                 BM_f += [factor_p2n * np.std(data_pre[data_pre > 0], ddof=1)]
+            except:
+                BM_f += [0]
             BM = BM_f
         return np.array(BM)
 
@@ -187,7 +193,9 @@ class DataToSave:
     def get_xy_ratio(self, *args):
         xy_ratio = []
         for data in args:
-            xy_ratio += [data[0] / data[1]]
+            ratio = data[0] / data[1]
+            ratio[ratio > 99999] = 99999
+            xy_ratio += [ratio.astype('float32')]
         return xy_ratio
 
     ##  data average operator for multiple columns(2D-array), output: (r,c)=(beads,attrs)

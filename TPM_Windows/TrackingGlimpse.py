@@ -26,7 +26,7 @@ from DataToSave import DataToSave
 from localization import select_folder
 import time
 
-read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
 frame_setread_num = 40 # only useful when mode = 0, can't exceed frame number of a file
 
 
