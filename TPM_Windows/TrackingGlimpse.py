@@ -29,7 +29,6 @@ import time
 read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
 frame_setread_num = 40 # only useful when mode = 0, can't exceed frame number of a file
 
-
 criteria_dist = 30 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
 frame_read_forcenter = 0 # no need to change, frame to autocenter beads
@@ -38,8 +37,6 @@ contrast = 12
 low = 40
 high = 120
 blacklevel = 30
-
-
 
 if __name__ == "__main__":
     path_folder = select_folder()

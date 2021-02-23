@@ -104,17 +104,32 @@ def sorteigen(values, vectors):
     return output_values.real, output_vectors # eigenvaluses must be real number because cov matrix is positive semi-definite
 
 ### get label data
+def get_attr_label_data(path_folder, attr, nor=True):
+    all_attrs_s, reduced_attrs_s = get_attrs_from_excel(path_folder, attr, excel_name='reshape_analyzed_selected.xlsx', nor=nor)
+    all_attrs_r, reduced_attrs_r = get_attrs_from_excel(path_folder, attr, excel_name='reshape_analyzed_removed.xlsx', nor=nor)
+    n_s = all_attrs_s.shape[0]
+    n_r = all_attrs_r.shape[0]
+    label = np.array([1]*n_s + [0]*n_r)
+    all_attrs = np.append(all_attrs_s, all_attrs_r, axis=0)
+    reduced_attrs = np.append(reduced_attrs_s, reduced_attrs_r, axis=0)
+    return all_attrs, reduced_attrs, label
+
+
+### get label data
 def get_label_data(path_folder):
-    all_attrs_nor_selected, all_med_attrs_nor_s = get_all_excel_data(path_folder, 'reshape_analyzed_selected.xlsx')
+    all_attrs_nor_selected, all_med_attrs_nor_s = get_all_excel_data(path_folder, 'reshape_analyzed_selected.xlsx', nor=True)
     all_attrs_nor_selected = np.append(all_attrs_nor_selected, np.ones((all_attrs_nor_selected.shape[0], 1)), axis=1)
+    
+    
     all_med_attrs_nor_s = np.append(all_med_attrs_nor_s, np.ones((all_med_attrs_nor_s.shape[0], 1)), axis=1)
-    all_attrs_nor_removed, all_med_attrs_nor_r = get_all_excel_data(path_folder, 'reshape_analyzed_removed.xlsx')
+    all_attrs_nor_removed, all_med_attrs_nor_r = get_all_excel_data(path_folder, 'reshape_analyzed_removed.xlsx', nor=True)
     all_attrs_nor_removed = np.append(all_attrs_nor_removed, np.zeros((all_attrs_nor_removed.shape[0], 1)), axis=1)
-    all_med_attrs_nor_r = np.append(all_med_attrs_nor_r, np.ones((all_med_attrs_nor_r.shape[0], 1)), axis=1)
+    all_med_attrs_nor_r = np.append(all_med_attrs_nor_r, np.zeros((all_med_attrs_nor_r.shape[0], 1)), axis=1)
 
     # return all_attrs_nor_selected, all_attrs_nor_removed
     all_attrs_nor_label = np.append(all_attrs_nor_selected, all_attrs_nor_removed, axis=0)
     all_med_attrs_nor_label = np.append(all_med_attrs_nor_s, all_med_attrs_nor_r, axis=0)
+    
     return all_attrs_nor_label, all_med_attrs_nor_label
 
 ##  reduce dimension[BM, xy_ratio, ]
@@ -126,29 +141,40 @@ def reduce_dim(med_attrs):
     s = np.mean(med_attrs[:, 9:11], axis=1).reshape((n,1))
     intensity_integral = med_attrs[:, -2].reshape((n,1))
     ss_res = med_attrs[:, -1].reshape((n,1))
-    pre_append_data = [BM, xy_ratio, s, intensity_integral, ss_res]
+    # pre_append_data = [BM, xy_ratio, s, intensity_integral, ss_res]
+    pre_append_data = [BM, xy_ratio, s, ss_res]
 
-    selected_attrs = np.array(pre_append_data).reshape(5,n).T
+    selected_attrs = np.array(pre_append_data).reshape(len(pre_append_data),n).T
     return selected_attrs
 
-# ##  append all data
-# def append_operator(*args, axis=1):
-#     n = np.shape(args[0])[0]
-#     data = np.empty((n,1))
-#     for arg in args:
-#         data = np.append(data, arg, axis=axis)
-#     return data
+### output = [med(18), std(18), avg(18+1)]
+def get_attrs_from_excel(path_folder, attr, excel_name='reshape_analyzed.xlsx', nor=False):
+    path_folders = glob(os.path.join(path_folder, '*'))
+    path_data = [glob(os.path.join(x, '*'+excel_name))[0] for x in path_folders if
+                 glob(os.path.join(x, '*'+excel_name)) != []]
+    df_attrs_dict = get_df_dict(path_data, sheet_names=[attr])
+    all_attrs = get_all_attrs(df_attrs_dict)
+    reduced_attrs = reduce_dim(all_attrs)
+    if nor == True:
+        all_attrs_nor = normalize_data(all_attrs)
+        reduced_attrs_nor = normalize_data(reduced_attrs)
+        return all_attrs_nor, reduced_attrs_nor
+    else:
+        return all_attrs, reduced_attrs
+    
+
 
 ### output = [med(18), std(18), avg(18+1)]
-def get_all_excel_data(path_folder, file_type='reshape_analyzed.xlsx'):
+def get_all_excel_data(path_folder, file_type='reshape_analyzed.xlsx', nor=False):
     # path_folder = select_folder()
     path_folders = glob(os.path.join(path_folder, '*'))
     path_data = [glob(os.path.join(x, '*'+file_type))[0] for x in path_folders if
                  glob(os.path.join(x, '*'+file_type)) != []]
-    df_avg_attrs_dict = get_df_dict(path_data, sheet_names=['avg_attrs'])
+    
     df_med_attrs_dict = get_df_dict(path_data, sheet_names=['med_attrs'])
     df_std_attrs_dict = get_df_dict(path_data, sheet_names=['std_attrs'])
-
+    df_avg_attrs_dict = get_df_dict(path_data, sheet_names=['avg_attrs'])
+    
     all_med_attrs = get_all_attrs(df_med_attrs_dict)
     all_med_attrs = reduce_dim(all_med_attrs)
     all_std_attrs = get_all_attrs(df_std_attrs_dict)
@@ -161,11 +187,13 @@ def get_all_excel_data(path_folder, file_type='reshape_analyzed.xlsx'):
     all_attrs = np.append(all_med_attrs, all_std_attrs, axis=1)
     all_attrs = np.append(all_attrs, all_avg_attrs, axis=1)
     all_attrs = np.append(all_attrs, all_bead_radius, axis=1)
-
-    all_attrs_nor = normalize_data(all_attrs)
-    all_med_attrs_nor = normalize_data(all_med_attrs)
-
-    return all_attrs_nor, all_med_attrs_nor
+    if nor == True:
+        all_attrs_nor = normalize_data(all_attrs)
+        all_med_attrs_nor = normalize_data(all_med_attrs)
+        return all_attrs_nor, all_med_attrs_nor
+    else:
+        return all_attrs, all_med_attrs
+    
 
 def get_eigens(all_attrs_nor):
     covariance_matrix = np.matmul(np.transpose(all_attrs_nor), all_attrs_nor) / (all_attrs_nor.shape[0] - 1)
@@ -179,56 +207,53 @@ def get_eigens(all_attrs_nor):
 #     columns = [f'bead_{i}' for i in range(bead_number)]
 #     return np.array(columns)
 
+# ##  append all data
+# def append_operator(*args, axis=1):
+#     n = np.shape(args[0])[0]
+#     data = np.empty((n,1))
+#     for arg in args:
+#         data = np.append(data, arg, axis=axis)
+#     return data
 
-# root = tk.Tk()
-# root.withdraw()
-# path_folder = os.path.abspath(filedialog.askdirectory())
+
+
+
 path_folder = select_folder()
-path_folders = glob(os.path.join(path_folder, '*'))
-path_data = [glob(os.path.join(x, '*reshape_analyzed.xlsx'))[0] for x in path_folders if glob(os.path.join(x, '*reshape_analyzed_selected.xlsx')) != []]
-
-# ### get data
-# df_avg_attrs_dict = get_df_dict(path_data, sheet_names=['avg_attrs'])
-# df_med_attrs_dict = get_df_dict(path_data, sheet_names=['med_attrs'])
-# df_std_attrs_dict = get_df_dict(path_data, sheet_names=['std_attrs'])
-#
-# all_med_attrs = get_all_attrs(df_med_attrs_dict)
-# all_std_attrs = get_all_attrs(df_std_attrs_dict)
-# all_avg_attrs = get_all_attrs(df_avg_attrs_dict)
-#
-# all_med_attrs = reduce_dim(all_med_attrs)
-# all_std_attrs = reduce_dim(all_std_attrs)
-# all_avg_attrs = reduce_dim(all_avg_attrs)
-#
-# all_attrs = np.append(all_med_attrs, all_std_attrs, axis=1)
-# all_attrs = np.append(all_attrs, all_avg_attrs, axis=1)
-# all_attrs_nor = normalize_data(all_attrs)
+# path_folders = glob(os.path.join(path_folder, '*'))
+# path_data = [glob(os.path.join(x, '*reshape_analyzed.xlsx'))[0] for x in path_folders if glob(os.path.join(x, '*reshape_analyzed_selected.xlsx')) != []]
 
 
-all_attrs_nor_label, all_med_attrs_nor_label = get_label_data(path_folder)
-label = all_attrs_nor_label[:, -1].reshape(all_attrs_nor_label.shape[0],1)
+### get data
+nor = True
+all_med_attrs, reduced_med_attrs, label = get_attr_label_data(path_folder, 'med_attrs', nor)
+all_std_attrs, reduced_std_attrs, label = get_attr_label_data(path_folder, 'std_attrs', nor)
+all_avg_attrs, reduced_avg_attrs, label = get_attr_label_data(path_folder, 'avg_attrs', nor)
 
-all_attrs_nor = all_attrs_nor_label[:, :-1]
-all_med_attrs_nor = all_med_attrs_nor_label[:, :-1]
 
-eigen_values_ps, eigen_values, eigen_vectors = get_eigens(all_attrs_nor)
+all_attrs = np.append(all_med_attrs, all_std_attrs, axis=1)
+all_attrs = np.append(all_attrs, all_avg_attrs, axis=1)
+reduced_attrs = np.append(reduced_med_attrs, reduced_std_attrs, axis=1)
+reduced_attrs = np.append(reduced_attrs, reduced_avg_attrs, axis=1)
+
+
+
+##  use own-make function
+eigen_values_ps, eigen_values, eigen_vectors = get_eigens(all_attrs)
 
 ##  use toolkit
-pca = PCA(n_components=5)
-result = pca.fit(all_med_attrs_nor)
-transform = result.transform(all_med_attrs_nor)
-x_all = transform[:,1]
-y_all = transform[:,2]
-# z_all = transform[:,3]
+pca = PCA(n_components=4)
+result = pca.fit(all_attrs)
+transform = result.transform(all_attrs)
+x_all = transform[:,0]
+y_all = transform[:,1]
+z_all = transform[:,2]
 
-z_all = all_med_attrs_nor_label[:, 0]
 for x,y,l in zip(x_all, y_all, label):
     if l == 1: # selected color is red
         c='r'
     else:
         c='b' # removed color is blue
     plt.plot(x ,y ,c+'o')
-
 
 fig = plt.figure()
 ax = Axes3D(fig)
@@ -238,68 +263,33 @@ for x, y, z, l in zip(x_all, y_all, z_all, label):
     else:
         c = 'b'  # removed color is blue
     ax.scatter(x, y, z, c=c)
+
+ax.set_xlabel('PC0')
+ax.set_ylabel('PC1')
+ax.set_zlabel('PC2')
+
 plt.show()
 
 
 
-# 設定ax為散佈圖
 
-
-
-
-
-# eigen_values_ps_s, eigen_values_s, eigen_vectors_s = get_eigens(all_attrs_nor_selected)
-# eigen_values_ps_r, eigen_values_r, eigen_vectors_r = get_eigens(all_attrs_nor_removed)
-
-# ###  for PCA analysis
-# ##  get covariance matrix
-# covariance_matrix = np.matmul(np.transpose(all_attrs_nor),all_attrs_nor)/(all_attrs_nor.shape[0]-1)
-# ##  get eigenvalue of covariance_matrix
-# eigen_values, eigen_vectors = la.eig(covariance_matrix)
-# eigen_values, eigen_vectors = sorteigen(eigen_values, eigen_vectors)
-# eigen_values_ps = eigen_values/sum(eigen_values)
+# path_data = [glob(os.path.join(x, '*reshape_analyzed_selected.xlsx'))[0] for x in path_folders if glob(os.path.join(x, '*reshape_analyzed_selected.xlsx')) != []]
 #
-#
-# ##  use toolkit
-# pca = PCA(n_components=3)
-# result = pca.fit(all_attrs_nor)
-# transform = result.transform(all_attrs_nor)
-# x = transform[:,0]
-# y = transform[:,1]
-# z = transform[:,2]
-#
-#
-# plt.plot(transform[:,0], transform[:,1], 'o')
-# plt.plot(transform[:,0], transform[:,2], 'o')
-# plt.plot(transform[:,1], transform[:,2], 'o')
-#
-#
-# # 製作figure
-# fig = plt.figure()
-#
-# ax = Axes3D(fig)
-#
-# # 設定ax為散佈圖
-# ax.scatter(x, y, z)
-#
-# plt.show()
+# ### get data
+# df_avg_attrs_dict = get_df_dict(path_data, sheet_names=['avg_attrs'])
+# df_med_attrs_dict = get_df_dict(path_data, sheet_names=['med_attrs'])
 #
 # df_BM_dict = get_df_dict(path_data, sheet_names=['BMx_fixing'])
 # df_sxsy_dict = get_df_dict(path_data, sheet_names=['sx_sy'])
 #
-# sx_sy_avg = get_attr(df_avg_attrs_dict, column_name='sx_sy')
-# BM_avg = get_BM_avg(df_avg_attrs_dict)
-# bead_radius = get_attr(df_avg_attrs_dict, column_name='bead_radius')
-# sx_sy_med = get_attr(df_med_attrs_dict, column_name='sx_sy')
 # BM_med = get_BM_avg(df_med_attrs_dict)
-#
-# BM_raw = get_BM_raw(df_BM_dict)
-# sxsy_raw = get_BM_raw(df_sxsy_dict)
+# sx_sy_med = get_attr(df_med_attrs_dict, column_name='sx_sy')
+# BM_avg = get_BM_avg(df_avg_attrs_dict)
+# sx_sy_avg = get_attr(df_avg_attrs_dict, column_name='sx_sy')
+# bead_radius = get_attr(df_avg_attrs_dict, column_name='bead_radius')
 #
 # results = np.array([BM_med, sx_sy_med, BM_avg, sx_sy_avg, bead_radius]).reshape(5,len(BM_med)).T
-# sheet_names = ['BM_median', 'sxsy_mediad', 'BM_avg', 'sxsy_avg', 'bead_radius']
 # columns = ['BM_median', 'sxsy_mediad', 'BM_avg', 'sxsy_avg', 'bead_radius']
-#
 #
 # filename_time = get_date()
 # random_string = gen_random_code(3)
@@ -307,11 +297,12 @@ plt.show()
 #
 # df_results = pd.DataFrame(data=results, columns=columns)
 # df_results.to_excel(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'), index=True)
-
-
-
-
 #
+
+
+# BM_raw = get_BM_raw(df_BM_dict)
+# sxsy_raw = get_BM_raw(df_sxsy_dict)
+# sheet_names = ['BM_median', 'sxsy_mediad', 'BM_avg', 'sxsy_avg', 'bead_radius']
 # writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
 # for sheet_name, data in zip(sheet_names):
 #     df_results = pd.DataFrame(data=data, columns=sheet_name)

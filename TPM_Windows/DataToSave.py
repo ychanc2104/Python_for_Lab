@@ -93,8 +93,12 @@ class DataToSave:
     ##  get selection criteria
     def get_criteria(self, df_reshape_analyzed):
         ratio = df_reshape_analyzed['avg_attrs'][['xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared']]
+        radius = df_reshape_analyzed['avg_attrs']['bead_radius']
         ratio = np.nan_to_num(ratio)
-        c = ((ratio > 0.8) & (ratio < 1.2))
+        radius = np.array(radius).reshape((ratio.shape[0], 1))
+        c_ratio = ((ratio > 0.85) & (ratio < 1.15))
+        c_radius = (radius > 1) & (radius < 10)
+        c = np.append(c_ratio, c_radius, axis=1)
         criteria = []
         for row_boolean in c:
             criteria += [all(row_boolean)]
