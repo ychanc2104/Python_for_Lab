@@ -37,6 +37,7 @@ class BinaryImage:
         self.path_folder = os.path.abspath(path_folder)
         self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
         self.path_header_utf8 = self.path_header.encode('utf8')
+        self.path_header_txt = os.path.abspath(os.path.join(path_folder, 'header.txt'))
         self.path_data = [os.path.abspath(x) for x in sorted(glob(os.path.join(self.path_folder, '*.glimpse'))) if
                           x != self.path_header]
         [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
