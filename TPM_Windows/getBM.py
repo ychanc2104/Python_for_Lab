@@ -3,8 +3,6 @@
 
 from localization import select_folder
 from glob import glob
-import tkinter as tk
-from tkinter import filedialog
 import random
 import string
 import numpy as np
@@ -115,22 +113,22 @@ def get_attr_label_data(path_folder, attr, nor=True):
     return all_attrs, reduced_attrs, label
 
 
-### get label data
-def get_label_data(path_folder):
-    all_attrs_nor_selected, all_med_attrs_nor_s = get_all_excel_data(path_folder, 'reshape_analyzed_selected.xlsx', nor=True)
-    all_attrs_nor_selected = np.append(all_attrs_nor_selected, np.ones((all_attrs_nor_selected.shape[0], 1)), axis=1)
+# ### get label data
+# def get_label_data(path_folder):
+#     all_attrs_nor_selected, all_med_attrs_nor_s = get_all_excel_data(path_folder, 'reshape_analyzed_selected.xlsx', nor=True)
+#     all_attrs_nor_selected = np.append(all_attrs_nor_selected, np.ones((all_attrs_nor_selected.shape[0], 1)), axis=1)
     
     
-    all_med_attrs_nor_s = np.append(all_med_attrs_nor_s, np.ones((all_med_attrs_nor_s.shape[0], 1)), axis=1)
-    all_attrs_nor_removed, all_med_attrs_nor_r = get_all_excel_data(path_folder, 'reshape_analyzed_removed.xlsx', nor=True)
-    all_attrs_nor_removed = np.append(all_attrs_nor_removed, np.zeros((all_attrs_nor_removed.shape[0], 1)), axis=1)
-    all_med_attrs_nor_r = np.append(all_med_attrs_nor_r, np.zeros((all_med_attrs_nor_r.shape[0], 1)), axis=1)
+#     all_med_attrs_nor_s = np.append(all_med_attrs_nor_s, np.ones((all_med_attrs_nor_s.shape[0], 1)), axis=1)
+#     all_attrs_nor_removed, all_med_attrs_nor_r = get_all_excel_data(path_folder, 'reshape_analyzed_removed.xlsx', nor=True)
+#     all_attrs_nor_removed = np.append(all_attrs_nor_removed, np.zeros((all_attrs_nor_removed.shape[0], 1)), axis=1)
+#     all_med_attrs_nor_r = np.append(all_med_attrs_nor_r, np.zeros((all_med_attrs_nor_r.shape[0], 1)), axis=1)
 
-    # return all_attrs_nor_selected, all_attrs_nor_removed
-    all_attrs_nor_label = np.append(all_attrs_nor_selected, all_attrs_nor_removed, axis=0)
-    all_med_attrs_nor_label = np.append(all_med_attrs_nor_s, all_med_attrs_nor_r, axis=0)
+#     # return all_attrs_nor_selected, all_attrs_nor_removed
+#     all_attrs_nor_label = np.append(all_attrs_nor_selected, all_attrs_nor_removed, axis=0)
+#     all_med_attrs_nor_label = np.append(all_med_attrs_nor_s, all_med_attrs_nor_r, axis=0)
     
-    return all_attrs_nor_label, all_med_attrs_nor_label
+#     return all_attrs_nor_label, all_med_attrs_nor_label
 
 ##  reduce dimension[BM, xy_ratio, ]
 def reduce_dim(med_attrs):
@@ -164,35 +162,35 @@ def get_attrs_from_excel(path_folder, attr, excel_name='reshape_analyzed.xlsx', 
     
 
 
-### output = [med(18), std(18), avg(18+1)]
-def get_all_excel_data(path_folder, file_type='reshape_analyzed.xlsx', nor=False):
-    # path_folder = select_folder()
-    path_folders = glob(os.path.join(path_folder, '*'))
-    path_data = [glob(os.path.join(x, '*'+file_type))[0] for x in path_folders if
-                 glob(os.path.join(x, '*'+file_type)) != []]
+# ### output = [med(18), std(18), avg(18+1)]
+# def get_all_excel_data(path_folder, file_type='reshape_analyzed.xlsx', nor=False):
+#     # path_folder = select_folder()
+#     path_folders = glob(os.path.join(path_folder, '*'))
+#     path_data = [glob(os.path.join(x, '*'+file_type))[0] for x in path_folders if
+#                  glob(os.path.join(x, '*'+file_type)) != []]
     
-    df_med_attrs_dict = get_df_dict(path_data, sheet_names=['med_attrs'])
-    df_std_attrs_dict = get_df_dict(path_data, sheet_names=['std_attrs'])
-    df_avg_attrs_dict = get_df_dict(path_data, sheet_names=['avg_attrs'])
+#     df_med_attrs_dict = get_df_dict(path_data, sheet_names=['med_attrs'])
+#     df_std_attrs_dict = get_df_dict(path_data, sheet_names=['std_attrs'])
+#     df_avg_attrs_dict = get_df_dict(path_data, sheet_names=['avg_attrs'])
     
-    all_med_attrs = get_all_attrs(df_med_attrs_dict)
-    all_med_attrs = reduce_dim(all_med_attrs)
-    all_std_attrs = get_all_attrs(df_std_attrs_dict)
-    all_std_attrs = reduce_dim(all_std_attrs)
-    all_avg_attrs = get_all_attrs(df_avg_attrs_dict)
-    all_bead_radius = all_avg_attrs[:,-1].reshape((all_avg_attrs.shape[0],1))
-    all_avg_attrs = reduce_dim(all_avg_attrs[:,:-1])
+#     all_med_attrs = get_all_attrs(df_med_attrs_dict)
+#     all_med_attrs = reduce_dim(all_med_attrs)
+#     all_std_attrs = get_all_attrs(df_std_attrs_dict)
+#     all_std_attrs = reduce_dim(all_std_attrs)
+#     all_avg_attrs = get_all_attrs(df_avg_attrs_dict)
+#     all_bead_radius = all_avg_attrs[:,-1].reshape((all_avg_attrs.shape[0],1))
+#     all_avg_attrs = reduce_dim(all_avg_attrs[:,:-1])
 
 
-    all_attrs = np.append(all_med_attrs, all_std_attrs, axis=1)
-    all_attrs = np.append(all_attrs, all_avg_attrs, axis=1)
-    all_attrs = np.append(all_attrs, all_bead_radius, axis=1)
-    if nor == True:
-        all_attrs_nor = normalize_data(all_attrs)
-        all_med_attrs_nor = normalize_data(all_med_attrs)
-        return all_attrs_nor, all_med_attrs_nor
-    else:
-        return all_attrs, all_med_attrs
+#     all_attrs = np.append(all_med_attrs, all_std_attrs, axis=1)
+#     all_attrs = np.append(all_attrs, all_avg_attrs, axis=1)
+#     all_attrs = np.append(all_attrs, all_bead_radius, axis=1)
+#     if nor == True:
+#         all_attrs_nor = normalize_data(all_attrs)
+#         all_med_attrs_nor = normalize_data(all_med_attrs)
+#         return all_attrs_nor, all_med_attrs_nor
+#     else:
+#         return all_attrs, all_med_attrs
     
 
 def get_eigens(all_attrs_nor):
