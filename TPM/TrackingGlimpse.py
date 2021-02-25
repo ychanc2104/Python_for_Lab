@@ -29,11 +29,11 @@ import time
 read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
 frame_setread_num = 40 # only useful when mode = 0, can't exceed frame number of a file
 
-criteria_dist = 30 # beabs are closer than 'criteria_dist' will remove
-aoi_size = 20
+criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
+aoi_size = 40
 frame_read_forcenter = 0 # no need to change, frame to autocenter beads
 N_loc = 40 # number of frame to stack and localization
-contrast = 12
+contrast = 20
 low = 40
 high = 120
 blacklevel = 30

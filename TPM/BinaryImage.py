@@ -71,7 +71,7 @@ class BinaryImage:
         self.x_fit = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
         self.y_fit = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
         self.bead_number = 0
-        self.initial_guess = [40., 3., 3., 11., 11., 0., 10.]
+        self.initial_guess = [40., 3., 3., aoi_size/2, aoi_size/2, 0., 10.]
         self.initial_guess_beads = np.empty(0)
         self.N = 0
         self.dx_localization = np.empty(0)
@@ -159,8 +159,8 @@ class BinaryImage:
         data, popt_beads = self.trackbead(image, cX, cY, aoi_size, frame=0, initial_guess_beads=initial_guess_beads)
         x = popt_beads[:, 3]
         y = popt_beads[:, 4]
-        self.dx_localization = x - 10
-        self.dy_localization = y - 10
+        self.dx_localization = x - aoi_size/2
+        self.dy_localization = y - aoi_size/2
         self.initial_guess_beads = popt_beads
         cX = cX + self.dx_localization
         cY = cY + self.dy_localization
@@ -177,10 +177,10 @@ class BinaryImage:
         initial_guess = self.initial_guess
         for j in range(bead_number):
             image_tofit, intensity = self.getAOI(image, cY[j], cX[j], aoi_size)
-            if intensity < 3500:
-                contrast = 2
-                image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
-                image_tofit = np.array(image_tofit)
+            # if intensity < 3500:
+            #     contrast = 2
+            #     image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
+            #     image_tofit = np.array(image_tofit)
             ## enhance contrast
             # image_bead = image[horizontal-10:(horizontal+10), vertical-10:(vertical+10)] # [x,y] = [width, height]
             # image_bead_bur = cv2.GaussianBlur(image_bead, (5, 5),2,2)
@@ -348,9 +348,10 @@ class BinaryImage:
     ##  plot X,Y AOI in given image
     def drawAOI(self, image, cX, cY, aoi_size=20):
         n = len(cX)
+
         for i in range(n):
             cv2.circle(image, (int(cX[i]), int(cY[i])), aoi_size, (255, 255, 255), 1)
-            cv2.putText(image, str(i), (int(cX[i] + 10), int(cY[i] + 10))
+            cv2.putText(image, str(i), (int(cX[i] + aoi_size/2), int(cY[i] + aoi_size/2))
                         , cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
         return image
 

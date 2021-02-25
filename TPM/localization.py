@@ -17,11 +17,11 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 
-criteria_dist = 30  # beabs are closer than 'criteria_dist' will remove
-aoi_size = 20
+criteria_dist = 10  # beabs are closer than 'criteria_dist' will remove
+aoi_size = 40
 frame_read_forcenter = 0  # no need to change, frame to autocenter beads
 N_loc = 40  # number of frame to stack and localization
-contrast = 12
+contrast = 20
 low = 40
 high = 120
 blacklevel = 30
