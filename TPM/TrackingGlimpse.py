@@ -26,14 +26,14 @@ from DataToSave import DataToSave
 from localization import select_folder
 import time
 
-read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
-frame_setread_num = 40 # only useful when mode = 0, can't exceed frame number of a file
+read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+frame_setread_num = 100 # only useful when mode = 0, can't exceed frame number of a file
 
 criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
-aoi_size = 40
+aoi_size = 30
 frame_read_forcenter = 0 # no need to change, frame to autocenter beads
 N_loc = 40 # number of frame to stack and localization
-contrast = 20
+contrast = 10
 low = 40
 high = 120
 blacklevel = 30
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     Glimpse_data = BinaryImage(path_folder, criteria_dist=criteria_dist, aoi_size=aoi_size,
                                frame_read_forcenter=frame_read_forcenter, N_loc=N_loc,
                                contrast=contrast, low=low, high=high, blacklevel=blacklevel)
-    image, cX, cY = Glimpse_data.Localize() # localize beads
+    image, cX, cY = Glimpse_data.Localize(put_text=True) # localize beads
     localization_results = Glimpse_data.radius_save
     tracking_results = Glimpse_data.Track_All_Frames(read_mode, frame_setread_num)
     Save_df = DataToSave(tracking_results, localization_results, path_folder, avg_fps=Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)

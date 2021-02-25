@@ -13,7 +13,10 @@ import scipy.linalg as la
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
-
+from numpy import unique
+from numpy import where
+from sklearn.datasets import make_classification
+from sklearn.mixture import GaussianMixture
 
 ### get analyzed sheet names
 
@@ -148,6 +151,33 @@ def reduce_dim(med_attrs):
     selected_attrs = np.array(pre_append_data).reshape(len(pre_append_data),n).T
     return selected_attrs
 
+##  reduce dimension[BM, xy_ratio, ]
+def select_attrs(all_attrs, keys_list):
+    columns = ['BMx_sliding', 'BMy_sliding', 'BMx_fixing', 'BMy_fixing',
+                'sx_sy', 'xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared',
+                'amplitude', 'sx', 'sy', 'x', 'y', 'theta_deg', 'offset', 'intensity',
+                'intensity_integral', 'ss_res']
+    n_features = len(columns)
+    attrs_dict = dict()
+    for value, key in enumerate(columns):
+        attrs_dict[key] = value
+    index_select = [attrs_dict[x] for x in keys_list] + [attrs_dict[x]+n_features for x in keys_list] + [attrs_dict[x]+2*n_features for x in keys_list]
+    selected_attrs = all_attrs[:, index_select]
+    return selected_attrs
+
+### get analyzed sheet names, add median
+def get_analyzed_sheet_names(self):
+    return ['BMx_sliding', 'BMy_sliding', 'BMx_fixing', 'BMy_fixing',
+            'sx_sy', 'xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared',
+            'med_attrs', 'avg_attrs', 'std_attrs']
+
+### get reshape sheet names
+def get_reshape_sheet_names(self):
+    return ['amplitude', 'sx', 'sy', 'x', 'y', 'theta_deg', 'offset', 'intensity', 'intensity_integral', 'ss_res']
+
+
+
+
 ### output = [med(18), std(18), avg(18+1)]
 def get_attrs_from_excel(path_folder, attr, excel_name='reshape_analyzed.xlsx'):
     path_folders = glob(os.path.join(path_folder, '*'))
@@ -224,8 +254,8 @@ def append_operator(*args, axis=1):
 
 
 path_folder = select_folder()
-# path_folders = glob(os.path.join(path_folder, '*'))
-# path_data = [glob(os.path.join(x, '*reshape_analyzed.xlsx'))[0] for x in path_folders if glob(os.path.join(x, '*reshape_analyzed_selected.xlsx')) != []]
+path_folders = glob(os.path.join(path_folder, '*'))
+path_data = [glob(os.path.join(x, '*reshape_analyzed.xlsx'))[0] for x in path_folders if glob(os.path.join(x, '*reshape_analyzed_selected.xlsx')) != []]
 
 
 ### get data
@@ -242,27 +272,50 @@ all_attrs_nor = append_operator(all_med_attrs_nor, all_std_attrs_nor, all_avg_at
 
 all_attrs_label = np.append(all_attrs, label_1, axis=1)
 all_attrs_nor_label = np.append(all_attrs_nor, label_1, axis=1)
-
-reduced_attrs = append_operator(reduced_med_attrs, reduced_std_attrs, reduced_avg_attrs, bead_radius)
-reduced_attrs_nor = append_operator(reduced_med_attrs_nor, reduced_std_attrs_nor, reduced_avg_attrs_nor, bead_radius)
-
-reduced_attrs_label = np.append(reduced_attrs, label_1, axis=1)
-reduced_attrs_nor_label = np.append(reduced_attrs_nor, label_1, axis=1)
+# reduced_attrs = append_operator(reduced_med_attrs, reduced_std_attrs, reduced_avg_attrs, bead_radius)
+# reduced_attrs_nor = append_operator(reduced_med_attrs_nor, reduced_std_attrs_nor, reduced_avg_attrs_nor, bead_radius)
+# reduced_attrs_label = np.append(reduced_attrs, label_1, axis=1)
+# reduced_attrs_nor_label = np.append(reduced_attrs_nor, label_1, axis=1)
 
 
+# col_1 = ['med_']*n + ['std_']*n + ['avg_']*n
+# col_2 = ['BM', 'xy_ratio', 'sxsy', 'ss_res']*3
+# columns = [x+y for x, y in zip(col_1, col_2)] + ['bead_radius', 'label']
+# filename_time = get_date()
+# random_string = gen_random_code(3)
+# filename = 'analyze_all_folders.xlsx'
+# df_results = pd.DataFrame(data=reduced_attrs_label, columns=columns)
+# df_results.to_excel(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'), index=True)
+# sheet_names = ['original', 'normalized']
+# data = [reduced_attrs_label, reduced_attrs_nor_label]
+# writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
+# for sheet_name, datum in zip(sheet_names, data):
+#     df_results = pd.DataFrame(data=datum, columns=columns)
+#     df_results.to_excel(writer, sheet_name=sheet_name, index=True)
+# writer.save()
+
+
+
+
+
+
+
+##  get PCA data
+keys_list = ['amplitude', 'sx', 'sy', 'offset', 'intensity', 'intensity_integral', 'ss_res']
+
+selected_attrs = select_attrs(all_attrs, keys_list)
+selected_attrs_nor = select_attrs(all_attrs_nor, keys_list)
+
+n = len(keys_list)
 col_1 = ['med_']*n + ['std_']*n + ['avg_']*n
-col_2 = ['BM', 'xy_ratio', 'sxsy', 'ss_res']*3
-columns = [x+y for x, y in zip(col_1, col_2)] + ['bead_radius', 'label']
+col_2 = keys_list * 3
+columns = [x+y for x, y in zip(col_1, col_2)]
 
 filename_time = get_date()
 random_string = gen_random_code(3)
-filename = 'analyze_all_folders.xlsx'
-
-# df_results = pd.DataFrame(data=reduced_attrs_label, columns=columns)
-# df_results.to_excel(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'), index=True)
-
+filename = 'collecting_features.xlsx'
 sheet_names = ['original', 'normalized']
-data = [reduced_attrs_label, reduced_attrs_nor_label]
+data = [selected_attrs, selected_attrs_nor]
 writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
 for sheet_name, datum in zip(sheet_names, data):
     df_results = pd.DataFrame(data=datum, columns=columns)
@@ -271,37 +324,44 @@ writer.save()
 
 
 
-##  use own-make function
-eigen_values_ps, eigen_values, eigen_vectors = get_eigens(all_attrs)
+#
+# ##  use own-make function
+# eigen_values_ps, eigen_values, eigen_vectors = get_eigens(selected_attrs)
+#
+# ##  use toolkit
+# pca = PCA(n_components=2)
+# result = pca.fit(selected_attrs)
+# transform = result.transform(selected_attrs)
+# x_all = transform[:,0]
+# y_all = transform[:,1]
+# z_all = transform[:,1]
+#
+#
+#
+# ##  visualization
+# for x,y,z,l in zip(x_all, y_all, z_all, label):
+#     if l == 1: # selected color is red
+#         c='r'
+#     else:
+#         c='b' # removed color is blue
+#     plt.plot(x,y ,c+'o')
+#
+#
+# fig = plt.figure()
+# ax = Axes3D(fig)
+# for x, y, z, l in zip(x_all, y_all, z_all, label):
+#     if l == 1:  # selected color is red
+#         c = 'r'
+#     else:
+#         c = 'b'  # removed color is blue
+#     ax.scatter(x, y, z, c=c)
+# ax.set_xlabel('PC0')
+# ax.set_ylabel('PC1')
+# ax.set_zlabel('PC2')
+# plt.show()
 
-##  use toolkit
-pca = PCA(n_components=4)
-result = pca.fit(all_attrs)
-transform = result.transform(all_attrs)
-x_all = transform[:,0]
-y_all = transform[:,1]
-z_all = transform[:,2]
 
-##  visualization
-for x,y,l in zip(x_all, y_all, label):
-    if l == 1: # selected color is red
-        c='r'
-    else:
-        c='b' # removed color is blue
-    plt.plot(x ,y ,c+'o')
-fig = plt.figure()
-ax = Axes3D(fig)
 
-for x, y, z, l in zip(x_all, y_all, z_all, label):
-    if l == 1:  # selected color is red
-        c = 'r'
-    else:
-        c = 'b'  # removed color is blue
-    ax.scatter(x, y, z, c=c)
-ax.set_xlabel('PC0')
-ax.set_ylabel('PC1')
-ax.set_zlabel('PC2')
-plt.show()
 
 
 

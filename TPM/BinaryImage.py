@@ -13,6 +13,8 @@ from glob import glob
 from PIL import Image, ImageEnhance
 import pandas as pd
 import io
+import random
+import string
 
 ###  2-D Gaussian function with rotation angle
 def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
@@ -80,7 +82,7 @@ class BinaryImage:
 
     ###########################################################################
     ##  main for localization
-    def Localize(self):
+    def Localize(self, put_text=True):
         print('start centering')
         image = self.image
         image = self.enhance_contrast(image, self.contrast)
@@ -95,7 +97,7 @@ class BinaryImage:
         cX, cY = self.get_accurate_xy(image, cX, cY)
 
         self.bead_number = len(cX)
-        image = self.drawAOI(image, cX, cY, self.aoi_size)
+        image = self.drawAOI(image, cX, cY, self.aoi_size, put_text=put_text)
         self.show_grayimage(image, save=True)
         self.cX = cX
         self.cY = cY
@@ -346,13 +348,13 @@ class BinaryImage:
         return cX, cY
 
     ##  plot X,Y AOI in given image
-    def drawAOI(self, image, cX, cY, aoi_size=20):
+    def drawAOI(self, image, cX, cY, aoi_size=20, put_text=True):
         n = len(cX)
-
         for i in range(n):
             cv2.circle(image, (int(cX[i]), int(cY[i])), aoi_size, (255, 255, 255), 1)
-            cv2.putText(image, str(i), (int(cX[i] + aoi_size/2), int(cY[i] + aoi_size/2))
-                        , cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
+            if put_text == True:
+                cv2.putText(image, str(i), (int(cX[i] + aoi_size/2), int(cY[i] + aoi_size/2))
+                            , cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
         return image
 
     ##  show and save gray image
@@ -360,7 +362,13 @@ class BinaryImage:
         plt.figure()
         plt.imshow(image, cmap='gray', vmin=0, vmax=255)
         if save == True:
-            cv2.imwrite(os.path.join(self.path_folder, 'output.png'), image)
+            cv2.imwrite(os.path.join(self.path_folder, self.gen_random_code(3)+'-output.png'), image)
+
+    ##  add 2n-word random texts(n-word number and n-word letter)
+    def gen_random_code(self, n):
+        digits = "".join([random.choice(string.digits) for i in range(n)])
+        chars = "".join([random.choice(string.ascii_letters) for i in range(n)])
+        return digits + chars
 
     ###############################################################################
     ### method for making video of certain aoi, tracking_results: list array
