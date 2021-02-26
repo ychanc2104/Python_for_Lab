@@ -33,7 +33,7 @@ read_mode = 0  # mode = 0 is only calculate 'frame_setread_num' frame, other num
 frame_setread_num = N  # only useful when mode = 0, can't exceed frame number of a file
 
 criteria_dist = 30  # beabs are closer than 'criteria_dist' will remove
-aoi_size = 20
+aoi_size = 30
 frame_read_forcenter = 0  # no need to change, frame to autocenter beads
 N_loc = 40  # number of frame to stack and localization
 contrast = 12

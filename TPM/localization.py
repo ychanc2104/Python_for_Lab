@@ -17,6 +17,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 
+put_text = False
 criteria_dist = 10  # beabs are closer than 'criteria_dist' will remove
 aoi_size = 10
 frame_read_forcenter = 0  # no need to change, frame to autocenter beads
@@ -37,7 +38,7 @@ def localization(path_folder, criteria_dist, aoi_size, frame_read_forcenter,
     Glimpse_data = BinaryImage(path_folder, criteria_dist=criteria_dist, aoi_size=aoi_size,
                                frame_read_forcenter=frame_read_forcenter, N_loc=N_loc,
                                contrast=contrast, low=low, high=high, blacklevel=blacklevel)
-    image, cX, cY = Glimpse_data.Localize()  # localize beads
+    image, cX, cY = Glimpse_data.Localize(put_text=put_text)  # localize beads
     return image, cX, cY
 
 if __name__ == "__main__":

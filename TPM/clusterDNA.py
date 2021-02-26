@@ -58,7 +58,7 @@ path_data = os.path.abspath(glob(os.path.join(path_folder, '*collecting_features
 
 df_nor = pd.read_excel(path_data, sheet_name='normalized', index_col=0)
 df = pd.read_excel(path_data, sheet_name='original', index_col=0)
-sx_sy = df['med_sx'] * df['med_sy']
+sx_sy = np.array(df['med_sx'] * df['med_sy'])
 
 selected_attrs = np.array(df_nor)
 
@@ -78,7 +78,7 @@ transform = result.transform(selected_attrs)
 
 X = transform
 # model = GaussianMixture(n_components=3)
-model = Birch(threshold=0.05, n_clusters=3)
+model = Birch(threshold=0.5, n_clusters=3)
 # fit the model
 model.fit(X)
 # assign a cluster to each example
@@ -96,4 +96,7 @@ for cluster in clusters:
 	# create scatter of these samples
 	plt.scatter(X[row_ix, 0], X[row_ix, 1])
 # show the plot
+plt.xlabel('PC1')
+plt.ylabel('PC2')
+
 plt.show()

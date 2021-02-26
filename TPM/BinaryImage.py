@@ -132,6 +132,7 @@ class BinaryImage:
         cY = self.cY
         x = self.x_fit
         y = self.y_fit
+        n_fit = len(x)
         aoi_size = self.aoi_size
         path_folder = self.path_folder
         tracking_results_select = self.get_aoi_from_tracking_results(tracking_results, selected_aoi)
@@ -145,7 +146,7 @@ class BinaryImage:
             fig, ax = plt.subplots(1, 1)
             ax.imshow(image_aoi, cmap=plt.cm.gray, origin='lower',
                       extent=(x.min(), x.max(), y.min(), y.max()))
-            ax.contour(x, y, data_fitted.reshape(20, 20), 5, colors='r')
+            ax.contour(x, y, data_fitted.reshape(n_fit, n_fit), 5, colors='r')
             # ax.contour(x, y, data_fitted.reshape(20, 20), 5)
             plot_img_np = self.get_img_from_fig(fig)
             plot_img_np = cv2.resize(plot_img_np, (1200, 800))
