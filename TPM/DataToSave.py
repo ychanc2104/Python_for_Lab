@@ -28,24 +28,26 @@ class DataToSave:
         self.sx_2D = np.array(self.df_reshape['sx'])
         self.sy_2D = np.array(self.df_reshape['sy'])
         self.df_reshape_analyzed = self.get_analyzed_data(self.df_reshape, window, avg_fps, factor_p2n)
-
+        self.random_string = self.gen_random_code(3)
     ##  save four files
     def Save_four_files(self):
-        random_string = self.gen_random_code(3)
-        self.save_fitresults_to_csv(random_string)
-        self.save_all_dict_df_to_excel(random_string)
-        self.save_selected_dict_df_to_excel(random_string)
-        self.save_removed_dict_df_to_excel(random_string)
+        # random_string = self.gen_random_code(3)
+        self.save_fitresults_to_csv()
+        self.save_all_dict_df_to_excel()
+        self.save_selected_dict_df_to_excel()
+        self.save_removed_dict_df_to_excel()
 
     ##  save fitresults to csv
-    def save_fitresults_to_csv(self, random_string):
+    def save_fitresults_to_csv(self):
+        random_string = self.random_string
         df = self.df
         path_folder = self.path_folder
         filename_time = self.filename_time
         df.to_csv(os.path.join(path_folder, f'{filename_time}-{random_string}-fitresults.csv'), index=False)
 
     ##  save all dictionary of DataFrame to excel sheets
-    def save_all_dict_df_to_excel(self, random_string):
+    def save_all_dict_df_to_excel(self):
+        random_string = self.random_string
         df_reshape_analyzed = self.df_reshape_analyzed
         path_folder = self.path_folder
         filename_time = self.filename_time
@@ -59,7 +61,8 @@ class DataToSave:
         writer.save()
 
     ##  save selected dictionary of DataFrame to excel sheets
-    def save_selected_dict_df_to_excel(self, random_string):
+    def save_selected_dict_df_to_excel(self):
+        random_string = self.random_string
         df_reshape_analyzed = self.df_reshape_analyzed
         path_folder = self.path_folder
         filename_time = self.filename_time
