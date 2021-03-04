@@ -93,11 +93,8 @@ def get_data_from_excel(path_folder, sheet_names, excel_name, axis):
 
 
 
-
 path_folder = select_folder()
-
 df_attrs_dict = get_data_from_excel(path_folder, sheet_names=['med_attrs', 'std_attrs', 'avg_attrs'], excel_name='reshape_analyzed.xlsx', axis=0)
-
 df_analyzed_dict = get_data_from_excel(path_folder, sheet_names=get_analyzed_sheet_names(), excel_name='reshape_analyzed.xlsx', axis=1)
 
 
@@ -154,7 +151,6 @@ df_S_dict = dict()
 
 for i, s in enumerate(S):
     df_S_dict[f'{i}'] = pd.DataFrame(data=s).set_index(S_name[i])
-# S_dict = [S_dict[f'{i}'] = pd.DataFrame(data=s, index=S_name[i]) for i, s in enumerate(S)]
 S_n_samples = [len(x) for x in S]
 S_mean = [np.mean(x) for x in S]
 S_std = [np.std(x, ddof=1) for x in S]
@@ -168,9 +164,9 @@ filename_time = get_date()
 random_string = gen_random_code(3)
 filename = 'statistics.xlsx'
 sheet_names = [f'DNA_{i}' for i in range(n_components)]
-# data = [df_select_attrs_dict['med_attrs'], df_select_attrs_nor_dict['med_attrs']]
 writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
 df_S_stat.to_excel(writer, sheet_name='statistics', index=True)
 for i, sheet_name in enumerate(sheet_names):
     df_S_dict[f'{i}'].to_excel(writer, sheet_name=sheet_name, index=True)
 writer.save()
+

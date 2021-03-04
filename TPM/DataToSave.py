@@ -20,7 +20,13 @@ class DataToSave:
         self.filename_time = self.get_date()
         self.bead_number = int(max(1 + self.df['aoi']))
         self.frame_acquired = int(len(self.df['x']) / self.bead_number)
+        self.frame_start = 0 # starting frame for statistics
+        self.frame_n = self.frame_acquired # frame number for statistics
         self.df_reshape = self.get_reshape_data(self.df, avg_fps, window)
+        self.x_2D = np.array(self.df_reshape['x'])
+        self.y_2D = np.array(self.df_reshape['y'])
+        self.sx_2D = np.array(self.df_reshape['sx'])
+        self.sy_2D = np.array(self.df_reshape['sy'])
         self.df_reshape_analyzed = self.get_analyzed_data(self.df_reshape, window, avg_fps, factor_p2n)
 
     ##  save four files
@@ -106,23 +112,21 @@ class DataToSave:
 
     ## get anaylyzed data, BM, sxsy,xy ratio...
     def get_analyzed_data(self, df_reshape, window, avg_fps, factor_p2n):
-        x_2D, y_2D, sx_2D, sy_2D, bead_number, frame_acquired = self.get_pre_analyzed_data(df_reshape)
-        analyzed_data = self.append_analyed_data(x_2D, y_2D, sx_2D, sy_2D, factor_p2n, avg_fps, frame_acquired, window)
+        bead_number = self.bead_number
+        analyzed_data = self.append_analyed_data(factor_p2n, avg_fps, window)
         analyzed_sheet_names = self.get_analyzed_sheet_names()
         df_reshape_analyzed = df_reshape.copy()
         # save data to dictionary of DataFrame
         for data, sheet_name in zip(analyzed_data, analyzed_sheet_names):
             if sheet_name == 'avg_attrs':
                 df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data,
-                                                               columns=self.get_attrs_col(name='avg_attrs')).set_index(
-                    self.get_columns('bead', data.shape[0])[1:])
+                                                               columns=self.get_attrs_col(name='avg_attrs')).set_index(self.get_columns('bead', data.shape[0])[1:])
             elif sheet_name == 'std_attrs' or sheet_name == 'med_attrs':
-                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_attrs_col()).set_index(
-                    self.get_columns('bead', data.shape[0])[1:])
+                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, 
+                                                               columns=self.get_attrs_col()).set_index(self.get_columns('bead', data.shape[0])[1:])
             else:
-                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, columns=self.get_columns(sheet_name,
-                                                                                                   bead_number)).set_index(
-                    'time')
+                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, 
+                                                               columns=self.get_columns(sheet_name, bead_number)).set_index('time')
         return df_reshape_analyzed
 
     ##  get columns for avg_attrs, med_attrs or std_attrs
@@ -135,9 +139,15 @@ class DataToSave:
             return analyzed_col + reshape_col + ['bead_radius']
 
     ##  append BM, sx_sy, xy_ratio, mean, std to analyzed_data
-    def append_analyed_data(self, x_2D, y_2D, sx_2D, sy_2D, factor_p2n, avg_fps, frame_acquired, window):
-        BMx_sliding, BMx_fixing = self.calBM_2D(x_2D, avg_fps, factor_p2n=factor_p2n)
-        BMy_sliding, BMy_fixing = self.calBM_2D(y_2D, avg_fps, factor_p2n=factor_p2n)
+    def append_analyed_data(self, factor_p2n, avg_fps, window):
+        x_2D = self.x_2D
+        y_2D = self.y_2D
+        sx_2D = self.sx_2D
+        sy_2D = self.sy_2D
+        frame_acquired = self.frame_acquired
+
+        BMx_sliding, BMx_fixing = self.calBM_2D(x_2D, factor_p2n=factor_p2n, window=window)
+        BMy_sliding, BMy_fixing = self.calBM_2D(y_2D, factor_p2n=factor_p2n, window=window)
         sx_sy = sx_2D * sy_2D
         xy_ratio = self.get_xy_ratio([BMx_sliding, BMy_sliding], [BMx_fixing, BMy_fixing], [sx_2D ** 2, sy_2D ** 2])
         data_analyzed_med, data_analyzed_avg, data_analyzed_std = self.avg_std_operator(BMx_sliding, BMx_fixing,
@@ -157,7 +167,7 @@ class DataToSave:
         return analyzed_data
 
     ### data:1D numpy array for a bead, BM: 1D numpy array
-    def calBM_1D(self, data, window=20, factor_p2n=10000 / 180, method='sliding'):
+    def calBM_1D(self, data, window=20, factor_p2n=10000/180, method='sliding'):
         if method == 'sliding':  # overlapping
             iteration = len(data) - window + 1  # silding window
             BM_s = []
@@ -181,13 +191,13 @@ class DataToSave:
         return np.array(BM)
 
     ##  cal BM of multiple beads, data_2D: (row, col)=(frames, beads)
-    def calBM_2D(self, data_2D, avg_fps, window=20, factor_p2n=10000 / 180):
+    def calBM_2D(self, data_2D, window=20, factor_p2n=10000/180):
         ##  get BM of each beads
         BM_sliding = []
         BM_fixing = []
         for data_1D in data_2D.T:
-            BM_sliding += [self.calBM_1D(data_1D, window=window, method='sliding')]
-            BM_fixing += [self.calBM_1D(data_1D, window=window, method='fixing')]
+            BM_sliding += [self.calBM_1D(data_1D, window=window, factor_p2n=factor_p2n, method='sliding')]
+            BM_fixing += [self.calBM_1D(data_1D, window=window, factor_p2n=factor_p2n, method='fixing')]
         BM_sliding = np.array(BM_sliding).T
         BM_fixing = np.array(BM_fixing).T
         return BM_sliding, BM_fixing
@@ -210,7 +220,7 @@ class DataToSave:
             data_med = []
             data_avg = []
             data_std = []
-            for data in data_2D.T:
+            for data in data_2D.T: # input row vector in each iteration
                 data_med += [np.median(data, axis=0)]
                 data_avg += [np.mean(data, axis=0)]
                 data_std += [np.std(data, axis=0, ddof=1)]
@@ -232,30 +242,20 @@ class DataToSave:
                 data_std += [np.std(data, axis=0, ddof=1)]
         return np.array(data_med).T, np.array(data_avg).T, np.array(data_std).T
 
-    ##  get x, y, sx, sy, bead_number, frame_acquired from df_reshape
-    def get_pre_analyzed_data(self, df_reshape):
-        x_2D = np.array(df_reshape['x'])
-        y_2D = np.array(df_reshape['y'])
-        sx_2D = np.array(df_reshape['sx'])
-        sy_2D = np.array(df_reshape['sy'])
-        bead_number = x_2D.shape[1]
-        frame_acquired = x_2D.shape[0]
-        return x_2D, y_2D, sx_2D, sy_2D, bead_number, frame_acquired
-
     ## get reshape data all
     def get_reshape_data(self, df, avg_fps, window=20):
-        bead_number = int(max(df['aoi']) + 1)
-        frame_acquired = int(len(df['x']) / bead_number)
+        bead_number = self.bead_number
+        frame_acquired = self.frame_acquired
         df_reshape = dict()
         dt = window / 2 / avg_fps
         for i, sheet_name in enumerate(df.columns):
             if i > 1:
-                df_reshape[sheet_name] = self.gather_reshape_sheets(df, sheet_name, bead_number, frame_acquired, dt,
-                                                                    avg_fps)
+                df_reshape[sheet_name] = self.gather_reshape_sheets(df, sheet_name, frame_acquired, avg_fps)
         return df_reshape
 
     ##  save each attributes to each sheets, data:2D array
-    def gather_reshape_sheets(self, df, sheet_name, bead_number, frame_acquired, dt, avg_fps):
+    def gather_reshape_sheets(self, df, sheet_name, frame_acquired, avg_fps):
+        bead_number = self.bead_number
         name = self.get_columns(sheet_name, bead_number)
         data = self.get_attrs(df[sheet_name], bead_number, frame_acquired)
         data = np.array(self.append_time([data], avg_fps, frame_acquired))
@@ -265,7 +265,7 @@ class DataToSave:
 
     ##  add time axis into first column, data: list of 2D array,(r,c)=(frame,bead)
     def append_time(self, analyzed_data, avg_fps, frames_acquired, window=20):
-        dt = window / 2 / avg_fps
+        dt = window/avg_fps/2
         analyzed_append_data = []
         for data in analyzed_data:
             time = dt + np.arange(0, data.shape[0]) / avg_fps * math.floor(frames_acquired / data.shape[0])

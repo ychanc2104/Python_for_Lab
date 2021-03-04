@@ -23,19 +23,32 @@ from sklearn.mixture import GaussianMixture
 ##  path_dat:list of path; sheet_names:list of string
 def get_df_dict(path_data, sheet_names):
     df_dict = dict()
-    n = 0
     for i, path in enumerate(path_data):
-        for j, sheet_name in enumerate(sheet_names):
-            df_dict[f'{n}'] = pd.read_excel(path, sheet_name=sheet_name, index_col=0)
-            n += 1
+        for sheet_name in sheet_names:
+            if i==0: ## initiate df_dict
+                df = pd.read_excel(path, sheet_name=sheet_name, index_col=0)
+                df_dict[f'{sheet_name}'] = df
+            else: ## append df_dict
+                df_dict[f'{sheet_name}'] = df_dict[f'{sheet_name}'].append(pd.read_excel(path, sheet_name=sheet_name, index_col=0))
     return df_dict
-        
+
+# ##  path_dat:list of path; sheet_names:list of string
+# def get_df_dict(path_data, sheet_names):
+#     df_dict = dict()
+#     n = 0
+#     for i, path in enumerate(path_data):
+#         for j, sheet_name in enumerate(sheet_names):
+#             df_dict[f'{n}'] = pd.read_excel(path, sheet_name=sheet_name, index_col=0)
+#             n += 1
+#     return df_dict
+
 
 def get_analyzed_sheet_names():
     return ['BMx_sliding', 'BMy_sliding', 'BMx_fixing', 'BMy_fixing',
             'sx_sy', 'xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared',
             'avg_attrs', 'std_attrs']
 
+##  concatenate cetain attr from all df, output: 1D
 def get_attr(df_dict, column_name):
     data = []
     n = len(df_dict)
@@ -45,6 +58,7 @@ def get_attr(df_dict, column_name):
         data = data.reshape(len(data),1)
     return data
 
+##  concatenate all attrs from all df, output: 2D
 def get_all_attrs(df_dict):
     data = np.array(df_dict['0'])
     n = len(df_dict)
@@ -53,28 +67,29 @@ def get_all_attrs(df_dict):
         data = np.append(data, np.array(df), axis=0)
     return data
 
-def get_attr_mat(df_dict, column_names):
-    attr = []
-    for column_name in column_names:
-        attr += [get_attr(df_dict, column_name=column_name)]
-    attr = np.array(attr)
-    return attr
+# ##  get multiple attrs from all df, output: 2D
+# def get_attr_mat(df_dict, column_names):
+#     attr = []
+#     for column_name in column_names:
+#         attr += [get_attr(df_dict, column_name=column_name)]
+#     attr = np.array(attr)
+#     return attr
 
 
-def get_BM_avg(df_avg_attrs_dict):
-    column_names = ['BMx_sliding', 'BMy_sliding', 'BMx_fixing', 'BMy_fixing']
-    attr = get_attr_mat(df_avg_attrs_dict, column_names)
-    BM_avg = np.mean(attr, axis=0)
-    return BM_avg
+# def get_BM_avg(df_avg_attrs_dict):
+#     column_names = ['BMx_sliding', 'BMy_sliding', 'BMx_fixing', 'BMy_fixing']
+#     attr = get_attr_mat(df_avg_attrs_dict, column_names)
+#     BM_avg = np.mean(attr, axis=0)
+#     return BM_avg
 
 
-def get_BM_raw(df_BM_dict):
-    BM_raw = []
-    n = len(df_BM_dict)
-    for i in range(n):
-        df_BM = df_BM_dict[f'{i}']
-        BM_raw = np.append(BM_raw, np.array(df_BM))
-    return BM_raw
+# def get_BM_raw(df_BM_dict):
+#     BM_raw = []
+#     n = len(df_BM_dict)
+#     for i in range(n):
+#         df_BM = df_BM_dict[f'{i}']
+#         BM_raw = np.append(BM_raw, np.array(df_BM))
+#     return BM_raw
 
 ##  add 2n-word random texts(n-word number and n-word letter)
 def gen_random_code(n):
@@ -190,13 +205,17 @@ def get_attrs_from_excel(path_folder, attr, excel_name='reshape_analyzed.xlsx'):
     reduced_attrs_nor = normalize_data(reduced_attrs)
     return all_attrs, reduced_attrs, all_attrs_nor, reduced_attrs_nor
 
-    # if nor == True:
-    #     all_attrs_nor = normalize_data(all_attrs)
-    #     reduced_attrs_nor = normalize_data(reduced_attrs)
-    #     return all_attrs_nor, reduced_attrs_nor
-    # else:
-    #     return all_attrs, reduced_attrs
-    
+
+
+def get_stat_attrs(path_folder, excel_name='reshape_analyzed.xlsx'):
+    path_folders = glob(os.path.join(path_folder, '*'))
+    path_data = [glob(os.path.join(x, '*'+excel_name))[0] for x in path_folders if
+                 glob(os.path.join(x, '*'+excel_name)) != []]
+    sheet_names = ['med_attrs', 'std_attrs', 'std_attrs']
+    df_attrs_dict = get_df_dict(path_data, sheet_names=sheet_names)
+    return df_attrs_dict
+
+
 
 
 # ### output = [med(18), std(18), avg(18+1)]
@@ -250,6 +269,8 @@ def append_operator(*args, axis=1):
         data = np.append(data, arg, axis=axis)
     return data
 
+##  get collecting data used for clustering
+# def get_collecting_data()
 
 
 
@@ -263,8 +284,10 @@ all_med_attrs, reduced_med_attrs, all_med_attrs_nor, reduced_med_attrs_nor, labe
 all_std_attrs, reduced_std_attrs, all_std_attrs_nor, reduced_std_attrs_nor, label = get_attr_label_data(path_folder, 'std_attrs')
 all_avg_attrs, reduced_avg_attrs, all_avg_attrs_nor, reduced_avg_attrs_nor, label = get_attr_label_data(path_folder, 'avg_attrs')
 bead_radius = all_avg_attrs[:, -1].reshape((all_avg_attrs.shape[0],1))
-n = reduced_avg_attrs.shape[1]
+
+n_feature = reduced_avg_attrs.shape[1]
 n_sample = reduced_avg_attrs.shape[0]
+
 label_1 = label.reshape((n_sample,1))
 
 all_attrs = append_operator(all_med_attrs, all_std_attrs, all_avg_attrs, bead_radius)
@@ -298,11 +321,11 @@ all_attrs_nor_label = np.append(all_attrs_nor, label_1, axis=1)
 
 
 
-
-
 ##  get PCA data
-keys_list = ['amplitude', 'sx', 'sy', 'offset', 'intensity', 'intensity_integral', 'ss_res']
+# keys_list = ['amplitude', 'sx', 'sy', 'offset', 'intensity', 'intensity_integral', 'ss_res']
+keys_list = ['sx_sy', 'xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared']
 
+## select attrs from med, std, avg sheets
 selected_attrs = select_attrs(all_attrs, keys_list)
 selected_attrs_nor = select_attrs(all_attrs_nor, keys_list)
 

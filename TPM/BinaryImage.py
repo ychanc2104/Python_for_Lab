@@ -32,10 +32,10 @@ def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
 
 ### define a class for all glimpse data
 class BinaryImage:
-    def __init__(self, path_folder, read_mode=0, frame_setread_num=10,
+    def __init__(self, path_folder, read_mode=1, frame_setread_num=10,
                  criteria_dist=10, aoi_size=20, frame_read_forcenter=0,
-                 N_loc=20, contrast=10, low=50, high=150,
-                 blacklevel=50):
+                 N_loc=40, contrast=10, low=40, high=120,
+                 blacklevel=30):
         self.path_folder = os.path.abspath(path_folder)
         self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
         self.path_header_utf8 = self.path_header.encode('utf8')
@@ -44,7 +44,8 @@ class BinaryImage:
                           x != self.path_header]
         [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
         self.data_type, self.size_a_image, self.frame_per_file = self.getdatainfo()
-        # self.time_axis = np.arange(0, self.frames_acquired)/self.avg_fps
+        self.read_mode = read_mode
+        self.frame_setread_num = frame_setread_num
         self.criteria_dist = criteria_dist
         self.aoi_size = aoi_size
         self.frame_read_forcenter = frame_read_forcenter
@@ -105,11 +106,13 @@ class BinaryImage:
         return image, cX, cY
 
     ##  main for tracking all frames and all beads(cX, cY)
-    def Track_All_Frames(self, read_mode, frame_setread_num):
+    def Track_All_Frames(self):
         cX = self.cX
         cY = self.cY
         frames_acquired = self.frames_acquired
         aoi_size = self.aoi_size
+        read_mode = self.read_mode
+        frame_setread_num = self.frame_setread_num
         initial_guess, initial_guess_beads, N = self.preparefit_info(read_mode, frame_setread_num, frames_acquired)
         # self.initial_guess_beads = initial_guess_beads
         p0_1 = initial_guess_beads  # initialize fitting parameters for each bead

@@ -18,7 +18,8 @@ from numpy import unique
 from numpy import where
 from sklearn.datasets import make_classification
 from sklearn.mixture import GaussianMixture
-from sklearn.cluster import Birch
+from sklearn.cluster import Birch, KMeans
+from sklearn.metrics import silhouette_score
 
 
 
@@ -58,7 +59,8 @@ path_data = os.path.abspath(glob(os.path.join(path_folder, '*collecting_features
 
 df_nor = pd.read_excel(path_data, sheet_name='normalized', index_col=0)
 df = pd.read_excel(path_data, sheet_name='original', index_col=0)
-sx_sy = np.array(df['med_sx'] * df['med_sy'])
+# sx_sy = np.array(df['med_sx'] * df['med_sy'])
+sx_sy = np.array(df['sx_sy'])
 
 selected_attrs = np.array(df_nor)
 
@@ -68,35 +70,71 @@ selected_attrs = np.array(df_nor)
 # selected_attrs = select_attrs(all_attrs_nor, keys_list)
 
 ##  use own-make function
-eigen_values_ps, eigen_values, eigen_vectors = get_eigens(selected_attrs)
+# eigen_values_ps, eigen_values, eigen_vectors = get_eigens(selected_attrs)
 
 ##  use toolkit
 pca = PCA(n_components=3)
 result = pca.fit(selected_attrs)
 transform = result.transform(selected_attrs)
-
-
 X = transform
-# model = GaussianMixture(n_components=3)
-model = Birch(threshold=0.5, n_clusters=3)
+
+
+# X = selected_attrs
+silhouette_array = []
+BICs = []
+n_clusters = np.arange(2,10)
+for c in n_clusters:
+    model = GaussianMixture(n_components=c)
+    # model = Birch(threshold=0.005, n_clusters=c)
+    model.fit(X)
+    label = model.predict(X)
+    silhouette_array += [silhouette_score(X, label)]
+    BICs += [model.bic(X)]
+
+plt.figure()
+plt.plot(n_clusters, silhouette_array,'o')
+plt.title('silhouette')
+plt.figure()
+plt.plot(n_clusters, BICs,'o')
+plt.title('BIC')
+
+
+n_components = n_clusters[np.argmin(BICs)]
+model = GaussianMixture(n_components=n_components, tol=1e-5)
+# model = Birch(threshold=0.05, n_clusters=5)
 # fit the model
 model.fit(X)
 # assign a cluster to each example
 label = model.predict(X)
+
+
+# s0 = sx_sy[label==0]
+# s1 = sx_sy[label==1]
+    
+
 s0 = sx_sy[label==0]
 s1 = sx_sy[label==1]
 s2 = sx_sy[label==2]
+s3 = sx_sy[label==3]
+s4 = sx_sy[label==4]
+s5 = sx_sy[label==5]
+
 
 # retrieve unique clusters
 clusters = unique(label)
-# create scatter plot for samples from each cluster
+# # create scatter plot for samples from each cluster
+fig = plt.figure()
+ax = Axes3D(fig)
 for cluster in clusters:
-	# get row indexes for samples with this cluster
-	row_ix = where(label == cluster)
-	# create scatter of these samples
-	plt.scatter(X[row_ix, 0], X[row_ix, 1])
-# show the plot
-plt.xlabel('PC1')
-plt.ylabel('PC2')
+ 	# get row indexes for samples with this cluster
+ 	row_ix = where(label == cluster)
+ 	# create scatter of these samples
+ 	ax.scatter(X[row_ix, 0], X[row_ix, 1], X[row_ix, 2])
+    # ax.scatter(X[row_ix, 0], X[row_ix, 1])
 
-plt.show()
+# show the plot
+ax.set_xlabel('PC0')
+ax.set_ylabel('PC1')
+ax.set_zlabel('PC2')
+
+# plt.show()
