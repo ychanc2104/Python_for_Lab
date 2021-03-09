@@ -35,7 +35,7 @@ class BinaryImage:
     def __init__(self, path_folder, read_mode=1, frame_setread_num=10,
                  criteria_dist=10, aoi_size=20, frame_read_forcenter=0,
                  N_loc=40, contrast=10, low=40, high=120,
-                 blacklevel=30):
+                 blacklevel=30, whitelevel=200):
         self.path_folder = os.path.abspath(path_folder)
         self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
         self.path_header_utf8 = self.path_header.encode('utf8')
@@ -54,6 +54,7 @@ class BinaryImage:
         self.low = low
         self.high = high
         self.blacklevel = blacklevel
+        self.whitelevel = whitelevel
         self.offset, self.fileNumber = self.getoffset()
         self.cut_image_width = 30
         # self.read1 = [] # one image at i
@@ -91,7 +92,9 @@ class BinaryImage:
         cX, cY = self.getXY(contours)
         # cX, cY = self.removeXY(cX, cY, self.criteria_dist)
         intensity = self.getintensity(image, cX, cY, self.aoi_size)
-        cX, cY = self.removeblack(cX, cY, intensity, self.blacklevel)
+        cX, cY, intensity = self.removeblack(cX, cY, intensity, self.blacklevel)
+        # cX, cY, intensity = self.removewhite(cX, cY, intensity, self.whitelevel)
+
         ##  need to sort according to X first and select
         cX, cY = self.sortXY(cX, cY)
         cX, cY = self.select_XY(cX, cY, self.criteria_dist)
@@ -349,7 +352,22 @@ class BinaryImage:
         self.radius_save = np.delete(self.radius_save, i_dele)
         self.saved_contours = np.delete(self.saved_contours, i_dele)
         intensity = np.delete(intensity, i_dele)
-        return cX, cY
+        return cX, cY, intensity
+
+    ##  remove high intensity aoi
+    def removewhite(self, cX, cY, intensity, whitelevel=150):
+        i_dele = np.empty(0).astype(int)
+        # cX = [x for i, x in enumerate(cX) if intensity[i] < whitelevel]
+        for i in range(len(cX)):
+            if intensity[i] > whitelevel:
+                i_dele = np.append(i_dele, int(i))
+        cX = np.delete(cX, i_dele)
+        cY = np.delete(cY, i_dele)
+        self.radius_save = np.delete(self.radius_save, i_dele)
+        self.saved_contours = np.delete(self.saved_contours, i_dele)
+        intensity = np.delete(intensity, i_dele)
+        return cX, cY, intensity
+
 
     ##  plot X,Y AOI in given image
     def drawAOI(self, image, cX, cY, aoi_size=20, put_text=True):

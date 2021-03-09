@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Flowchart
 1. Localization:
@@ -25,13 +24,16 @@ from BinaryImage import BinaryImage
 from DataToSave import DataToSave
 from localization import select_folder
 import time
+from glob import glob
+import os
+
 
 read_mode = 1 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
-frame_setread_num = 50 # only useful when mode = 0, can't exceed frame number of a file
+frame_setread_num = 21 # only useful when mode = 0, can't exceed frame number of a file
 
 criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
-frame_read_forcenter = 55 # no need to change, frame to autocenter beads
+frame_read_forcenter = 0 # no need to change, frame to autocenter beads
 N_loc = 40 # number of frame to stack and localization
 contrast = 7
 low = 40
@@ -41,20 +43,17 @@ whitelevel = 70
 
 if __name__ == "__main__":
     path_folder = select_folder()
-    t1 = time.time()
-    Glimpse_data = BinaryImage(path_folder, read_mode=read_mode, frame_setread_num=frame_setread_num, criteria_dist=criteria_dist, aoi_size=aoi_size,
-                               frame_read_forcenter=frame_read_forcenter, N_loc=N_loc,
-                               contrast=contrast, low=low, high=high, blacklevel=blacklevel, whitelevel=whitelevel)
-    image, cX, cY = Glimpse_data.Localize(put_text=True) # localize beads
-    localization_results = Glimpse_data.radius_save
-    localization_results = localization_results.reshape((len(localization_results),1))
-    tracking_results = Glimpse_data.Track_All_Frames()
-    Save_df = DataToSave(tracking_results, localization_results, path_folder, avg_fps=Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)
-    Save_df.Save_four_files()
-    time_spent = time.time() - t1
-    print('spent ' + str(time_spent) + ' s')
-
-
-
-
-
+    path_folders = glob(os.path.join(path_folder, '*'))
+    for path_folder in path_folders:
+        t1 = time.time()
+        Glimpse_data = BinaryImage(path_folder, read_mode=read_mode, frame_setread_num=frame_setread_num, criteria_dist=criteria_dist, aoi_size=aoi_size,
+                                   frame_read_forcenter=frame_read_forcenter, N_loc=N_loc,
+                                   contrast=contrast, low=low, high=high, blacklevel=blacklevel, whitelevel=whitelevel)
+        image, cX, cY = Glimpse_data.Localize(put_text=True) # localize beads
+        localization_results = Glimpse_data.radius_save
+        # localization_results = localization_results.reshape((len(localization_results),1))
+        tracking_results = Glimpse_data.Track_All_Frames()
+        Save_df = DataToSave(tracking_results, localization_results, path_folder, avg_fps=Glimpse_data.avg_fps, window=20, factor_p2n=10000/180)
+        Save_df.Save_four_files()
+        time_spent = time.time() - t1
+        print('spent ' + str(time_spent) + ' s')

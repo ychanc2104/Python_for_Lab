@@ -46,12 +46,12 @@ class DataToSave:
         df.to_csv(os.path.join(path_folder, f'{filename_time}-{random_string}-fitresults.csv'), index=False)
 
     ##  save all dictionary of DataFrame to excel sheets
-    def save_all_dict_df_to_excel(self):
+    def save_all_dict_df_to_excel(self, title=''):
         random_string = self.random_string
         df_reshape_analyzed = self.df_reshape_analyzed
         path_folder = self.path_folder
         filename_time = self.filename_time
-        filename = 'fitresults_reshape_analyzed.xlsx'
+        filename = title + '-fitresults_reshape_analyzed.xlsx'
         sheet_names = self.sheet_names
 
         writer = pd.ExcelWriter(os.path.join(path_folder, f'{filename_time}-{random_string}-{filename}'))
@@ -81,7 +81,8 @@ class DataToSave:
         writer.save()
 
     ##  save removed dictionary of DataFrame to excel sheets
-    def save_removed_dict_df_to_excel(self, random_string):
+    def save_removed_dict_df_to_excel(self):
+        random_string = self.random_string
         df_reshape_analyzed = self.df_reshape_analyzed
         path_folder = self.path_folder
         filename_time = self.filename_time
