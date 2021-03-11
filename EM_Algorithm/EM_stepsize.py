@@ -33,6 +33,7 @@ def GMM(data, n_components, tolerance=10e-5):
     m_save = []
     s_save = []
     f_save = []
+    improvement = 10
     while (j < 100 or improvement > tolerance) and j < 5000:
         m_save, s_save, f_save = collect_EM_results([m_save, m], [s_save, s], [f_save, f])
         likelihood = weighting(data, m, s, f)
@@ -56,9 +57,9 @@ def init_GMM(data, n_components):
 
 ##  calculate the probability belonging to each cluster, (m,s)
 def weighting(data, m, s, f):
-    n_feature = len(m)
+    n_components = len(m)
     n_sample = len(data)
-    likelihood = np.zeros((n_feature, n_sample))
+    likelihood = np.zeros((n_components, n_sample))
     for i, x in enumerate(data):
         p = oneD_gaussian(x, m, s)
         likelihood[:, i] = f * p / sum(f * p)
