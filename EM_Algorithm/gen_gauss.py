@@ -1,9 +1,6 @@
-
-
 import numpy as np
-import matplotlib.pyplot as plt
 import random
-
+from binning import binning
 
 def gen_gauss(mean, std, n_sample):
     data = []
@@ -11,19 +8,6 @@ def gen_gauss(mean, std, n_sample):
         for i in range(n):
             data = np.append(data, random.gauss(m, s))
     return data
-
-def binning(data, bin_number):
-    count, edges = np.histogram(data, bin_number)
-    center = []
-    edges = list(edges)
-    for i in range(len(edges) - 1):
-        center += [(edges[i] + edges[i + 1]) / 2]
-    binsize = center[1] - center[0]
-    pd = count/sum(count)/binsize
-    plt.figure()
-    plt.bar(center, pd, width=binsize, color="grey", edgecolor="white")
-    return pd, center
-
 
 if __name__ == "__main__":
     mean = 5

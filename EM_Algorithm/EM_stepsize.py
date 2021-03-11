@@ -5,7 +5,7 @@ Created on Wed Mar 10 13:48:42 2021
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-from gen_gauss import binning
+from binning import binning
 
 def oneD_gaussian(x, xm, s):
     y = 1/s/np.sqrt(2*math.pi)*np.exp(-(x-xm)**2/2/s**2)
@@ -26,14 +26,14 @@ def plot_fit_gauss(data, f, m, s):
     plt.ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
 
 
-def GMM(data, n_components, tolerance=10e-3):
+def GMM(data, n_components, tolerance=10e-5):
     ##  initialize EM parameters
     m, s, f = init_GMM(data, n_components=n_components)
     j = 0
     m_save = []
     s_save = []
     f_save = []
-    while (j < 50 or improvement > tolerance) and j < 500:
+    while (j < 100 or improvement > tolerance) and j < 5000:
         m_save, s_save, f_save = collect_EM_results([m_save, m], [s_save, s], [f_save, f])
         likelihood = weighting(data, m, s, f)
         m, s, f = update_m_s_f(likelihood, data)
@@ -115,8 +115,6 @@ def reshape_all(*args, n_components):
         results += [np.reshape(arg, (n_sample, n_components))]
     return results
 
-
-
 if __name__ == '__main__':
     ##  import data
     # data = np.array([179, 165, 175, 185, 158, 190])
@@ -126,15 +124,11 @@ if __name__ == '__main__':
     n_components = 2
     m_save, s_save, f_save, label, data_cluster = GMM(data, n_components, tolerance=10e-3)
     m = m_save[-1,:]
-    s = s_save[-1, :]
-    f = f_save[-1, :]
+    s = s_save[-1,:]
+    f = f_save[-1,:]
 
     ##  plot EM results(mean, std, fractio with iteration)
     plot_EM_results(m_save, s_save, f_save)
 
     ##  plot data histogram and its gaussian EM (GMM) results
     plot_fit_gauss(data, f, m, s)
-
-    # print(f'bin size is {center[1]-center[0]}')
-
-
