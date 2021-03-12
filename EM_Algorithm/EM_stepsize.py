@@ -3,7 +3,7 @@
 Created on Wed Mar 10 13:48:42 2021
 """
 
-from EM_Algorithm.binning import binning
+from basic.binning import binning
 import numpy as np
 import matplotlib.pyplot as plt
 import math

@@ -1,5 +1,5 @@
 
-from EM_Algorithm.binning import binning
+from basic.binning import binning
 import numpy as np
 import random
 

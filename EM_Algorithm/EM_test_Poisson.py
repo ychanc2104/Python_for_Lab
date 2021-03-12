@@ -1,6 +1,6 @@
 from EM_Algorithm.gen_poisson import gen_poisson
 from EM_Algorithm.EM_stepsize import collect_EM_results, cal_improvement
-from EM_Algorithm.binning import binning
+from basic.binning import binning
 import numpy as np
 import matplotlib.pyplot as plt
 
