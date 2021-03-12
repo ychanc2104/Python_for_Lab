@@ -1,4 +1,7 @@
 
+from matplotlib import rcParams
+rcParams["font.family"] = "sans-serif"
+rcParams["font.sans-serif"] = ["Arial"]
 from EM_Algorithm.EM_stepsize import GMM, plot_EM_results, plot_fit_gauss
 from EM_Algorithm.EM_test_Poisson import exp_EM, plot_EM_results_exp, plot_fit_pdf, exp_pdf
 from basic.select import get_files, select_folder

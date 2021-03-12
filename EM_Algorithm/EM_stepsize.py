@@ -2,6 +2,9 @@
 """
 Created on Wed Mar 10 13:48:42 2021
 """
+from matplotlib import rcParams
+rcParams["font.family"] = "sans-serif"
+rcParams["font.sans-serif"] = ["Arial"]
 
 from basic.binning import binning
 import numpy as np

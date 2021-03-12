@@ -1,10 +1,10 @@
+from matplotlib import rcParams
+rcParams["font.family"] = "sans-serif"
+rcParams["font.sans-serif"] = ["Arial"]
 from EM_Algorithm.gen_poisson import gen_poisson
 from EM_Algorithm.EM_stepsize import collect_EM_results, cal_improvement
 from basic.binning import binning
 import numpy as np
-from matplotlib import rcParams
-rcParams["font.family"] = "Helvetica"
-# rcParams['font.sans-serif'] = ['Tahoma']
 import matplotlib.pyplot as plt
 
 def exp_EM(data, n_components, tolerance=10e-5):
