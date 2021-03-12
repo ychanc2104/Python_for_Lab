@@ -2,6 +2,9 @@ from EM_Algorithm.gen_poisson import gen_poisson
 from EM_Algorithm.EM_stepsize import collect_EM_results, cal_improvement
 from basic.binning import binning
 import numpy as np
+from matplotlib import rcParams
+rcParams["font.family"] = "Helvetica"
+# rcParams['font.sans-serif'] = ['Tahoma']
 import matplotlib.pyplot as plt
 
 def exp_EM(data, n_components, tolerance=10e-5):
@@ -26,7 +29,7 @@ def init(data, n_components):
         mean = np.mean(data)
         std = np.std(data, ddof=1)
         f = np.ones(n_components) / n_components
-        tau = np.arange(abs(mean - 0.5 * std), mean + 0.5 * std + 1, 1*std/(n_components - 1))
+        tau = np.linspace(abs(mean - 0.5 * std), mean + 0.5 * std + 1, n_components)
         return f, tau
 
 ##  args: list
@@ -68,7 +71,7 @@ def update_tau_f(likelihood, data):
     f = np.sum(likelihood, axis=1) / n_sample
     return tau, f
 
-def plot_EM_results(results, labels):
+def plot_EM_results_exp(results, labels):
     n_components = len(results)
     fig, axs = plt.subplots(n_components, sharex=True)
     axs[-1].set_xlabel('iteration', fontsize=15)
@@ -85,8 +88,10 @@ def plot_EM_result(result, ax, xlabel='iteration', ylabel='value'):
 
 ##  plot data histogram and its gaussian EM (GMM) results, results:
 def plot_fit_pdf(data, function, results):
+    n_sample = len(data)
     n_components = len(results[0])
-    bin_width = (12/n_sample)**(1/3)*np.mean(data)/n_components**1.3 ## scott's formula for poisson process
+    # bin_width = (12/n_sample)**(1/3)*np.mean(data)/n_components**1.3 ## scott's formula for poisson process
+    bin_width = (12/n_sample)**(1/3)*np.mean(data) ## scott's formula for poisson process
     bin_number = int((max(data)-min(data))/bin_width)
     pd, center = binning(data, bin_number) # plot histogram
     data_std_new = np.std(data, ddof=1)
@@ -97,20 +102,112 @@ def plot_fit_pdf(data, function, results):
     plt.plot(x, sum(y_fit), '-')
     plt.xlabel('dwell time (s)', fontsize=15)
     plt.ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
-    plt.xlim([0, data_std_new*2])
+    plt.xlim([0, np.mean(data)*3])
 
 
 if __name__ == "__main__":
     ##  produce data
-    data = gen_poisson(tau=[0.1, 2, 10], n_sample=[200, 200, 200])
+    data = gen_poisson(tau=[0.1, 2], n_sample=[200, 200])
+    # data =[0.2925 0.315  0.7875 1.0575 0.42   0.21   0.1125 0.105  0.1125 0.1725, 0.315  0.8175 0.18   0.1125 1.0275 0.2475 0.2475 0.51   2.28   0.72, 1.255  0.515  1.425  1.845  1.395  0.345  2.325  2.095  1.81   0.56, 1.065  0.875  0.65   2.525  0.665  1.38   2.17   1.125  0.245  1.38, 0.77   3.125  0.855  2.34   5.86   0.345  0.825  0.145  0.42   0.19, 0.375  0.345  0.735  1.76   1.115  0.46   1.285  0.605  3.43   0.765, 1.53   1.04   1.615  0.58   1.235  1.23   0.345  1.205  0.25   2.75, 0.595  0.835  1.385  4.225  0.6975 0.96   0.2475 0.18   0.3825 0.2325, 1.4025 0.1125 0.2625 0.42   0.3675 0.1425 0.5775 0.1575 0.105  0.0975]
+    data = [0.2925,
+            0.315,
+            0.7875,
+            1.0575,
+            0.42,
+            0.21,
+            0.1125,
+            0.105,
+            0.1125,
+            0.1725,
+            0.315,
+            0.8175,
+            0.18,
+            0.1125,
+            1.0275,
+            0.2475,
+            0.2475,
+            0.51,
+            2.28,
+            0.72,
+            1.255,
+            0.515,
+            1.425,
+            1.845,
+            1.395,
+            0.345,
+            2.325,
+            2.095,
+            1.81,
+            0.56,
+            1.065,
+            0.875,
+            0.65,
+            2.525,
+            0.665,
+            1.38,
+            2.17,
+            1.125,
+            0.245,
+            1.38,
+            0.77,
+            3.125,
+            0.855,
+            2.34,
+            5.86,
+            0.345,
+            0.825,
+            0.145,
+            0.42,
+            0.19,
+            0.375,
+            0.345,
+            0.735,
+            1.76,
+            1.115,
+            0.46,
+            1.285,
+            0.605,
+            3.43,
+            0.765,
+            1.53,
+            1.04,
+            1.615,
+            0.58,
+            1.235,
+            1.23,
+            0.345,
+            1.205,
+            0.25,
+            2.75,
+            0.595,
+            0.835,
+            1.385,
+            4.225,
+            0.6975,
+            0.96,
+            0.2475,
+            0.18,
+            0.3825,
+            0.2325,
+            1.4025,
+            0.1125,
+            0.2625,
+            0.42,
+            0.3675,
+            0.1425,
+            0.5775,
+            0.1575,
+            0.105,
+            0.0975,
+            ]
     n_sample = len(data)
 
     ##  fit EM
-    n_components = 3
+    n_components = 2
     f_save, tau_save = exp_EM(data, n_components, tolerance=10e-5)
 
     ##  plot EM results(mean, std, fractio with iteration)
-    plot_EM_results([f_save, tau_save], ['fraction', 'dwell time'])
+    plot_EM_results_exp([f_save, tau_save], ['fraction', 'dwell time'])
 
     ##  plot data histogram and its gaussian EM (GMM) results
     plot_fit_pdf(data, exp_pdf, [f_save[-1,:], tau_save[-1,:]])
