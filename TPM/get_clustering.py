@@ -1,7 +1,7 @@
 
 ### import used modules first
 
-from localization import select_folder
+from .localization import select_folder
 from glob import glob
 import random
 import string

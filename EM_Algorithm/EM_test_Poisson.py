@@ -1,10 +1,8 @@
-from gen_poisson import gen_poisson
+from EM_Algorithm.gen_poisson import gen_poisson
+from EM_Algorithm.EM_stepsize import collect_EM_results, cal_improvement
+from EM_Algorithm.binning import binning
 import numpy as np
-from EM_stepsize import collect_EM_results, cal_improvement
 import matplotlib.pyplot as plt
-from binning import binning
-
-
 
 def exp_pdf(t, tau):
     y = 1/tau*np.exp(-t/tau)
@@ -47,7 +45,7 @@ def plot_EM_result(result, ax, xlabel='iteration', ylabel='value'):
 
 if __name__ == "__main__":
     n_sample = 500
-    data = gen_poisson(tau=[0.1, 2, 10], n_sample=[200, 200, 2000])
+    data = gen_poisson(tau=[0.1, 2, 10], n_sample=[200, 200, 200])
     n_sample = len(data)
     # likelihood = weighting(data, tau, f)
     # tau2, f2 = update_tau_f(likelihood, data)
@@ -80,7 +78,7 @@ if __name__ == "__main__":
     label = np.array(label)
     data_cluster = [data[label == i] for i in range(n_components)]
 
-    bin_width = (12/n_sample)**(1/3)*np.mean(data)/n_components**1.5 ## scott's formula for poisson process
+    bin_width = (12/n_sample)**(1/3)*np.mean(data)/n_components**1.3 ## scott's formula for poisson process
     bin_number = int((max(data)-min(data))/bin_width)
     pd, center = binning(data, bin_number, xlabel='dwell time (s)')
     

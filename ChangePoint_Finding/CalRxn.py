@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov 25 12:53:07 2020
-
-@author: YCC
-
 custom-made gradient descent with four optimization methods 
 ('AdaGrad' , 'RSMprop' , 'Momentum' , 'Adam')
 """

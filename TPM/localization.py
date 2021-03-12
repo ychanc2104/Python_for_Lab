@@ -12,7 +12,7 @@
 
 """
 ### import used modules first
-from BinaryImage import BinaryImage
+from TPM.BinaryImage import BinaryImage
 import time
 import tkinter as tk
 from tkinter import filedialog

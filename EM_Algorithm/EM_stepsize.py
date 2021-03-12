@@ -2,10 +2,11 @@
 """
 Created on Wed Mar 10 13:48:42 2021
 """
+
+from EM_Algorithm.binning import binning
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-from binning import binning
 
 def oneD_gaussian(x, xm, s):
     y = 1/s/np.sqrt(2*math.pi)*np.exp(-(x-xm)**2/2/s**2)

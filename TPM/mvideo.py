@@ -20,8 +20,8 @@ Flowchart
 """
 
 ### import used modules first
-from BinaryImage import BinaryImage
-from localization import select_folder
+from TPM.BinaryImage import BinaryImage
+from TPM.localization import select_folder
 import time
 
 

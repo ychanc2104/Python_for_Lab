@@ -1,6 +1,7 @@
+
+from EM_Algorithm.binning import binning
 import numpy as np
 import random
-from binning import binning
 
 def gen_gauss(mean, std, n_sample):
     data = []

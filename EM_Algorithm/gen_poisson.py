@@ -1,6 +1,7 @@
+
+from EM_Algorithm.binning import binning
 import numpy as np
 import random
-from binning import binning
 
 def gen_poisson(tau, n_sample):
     data = []
