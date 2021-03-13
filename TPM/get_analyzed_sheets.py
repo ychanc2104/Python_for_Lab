@@ -1,8 +1,8 @@
 
 
-from .BinaryImage import BinaryImage
-from .DataToSave import DataToSave
-from .localization import select_folder
+from TPM.BinaryImage import BinaryImage
+from TPM.DataToSave import DataToSave
+from TPM.localization import select_folder
 import time
 import tkinter as tk
 from tkinter import filedialog
