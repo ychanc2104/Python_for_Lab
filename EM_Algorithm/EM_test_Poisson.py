@@ -1,6 +1,11 @@
 from matplotlib import rcParams
 rcParams["font.family"] = "sans-serif"
 rcParams["font.sans-serif"] = ["Arial"]
+# import matplotlib
+# matplotlib.rc('font', family='sans-serif')
+# matplotlib.rc('font', serif='Arial')
+# matplotlib.rc('text', usetex='false')
+# matplotlib.rcParams.update({'font.size': 18})
 from EM_Algorithm.gen_poisson import gen_poisson
 from EM_Algorithm.EM_stepsize import collect_EM_results, cal_improvement
 from basic.binning import binning
@@ -95,14 +100,14 @@ def plot_fit_pdf(data, function, results):
     bin_number = int((max(data)-min(data))/bin_width)
     pd, center = binning(data, bin_number) # plot histogram
     data_std_new = np.std(data, ddof=1)
-    x = np.arange(0.1, max(data), 0.01)
+    x = np.arange(0.1, max(data) + data_std_new, 0.01)
     y_fit = function(x, results)
     for i in range(n_components):
         plt.plot(x, y_fit[i,:], '-')
     plt.plot(x, sum(y_fit), '-')
     plt.xlabel('dwell time (s)', fontsize=15)
     plt.ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
-    plt.xlim([0, np.mean(data)*3])
+    plt.xlim([0, np.mean(data)*4])
 
 
 if __name__ == "__main__":
