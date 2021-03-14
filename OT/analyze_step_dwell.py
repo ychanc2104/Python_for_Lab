@@ -7,16 +7,19 @@ from EM_Algorithm.EM_test_Poisson import exp_EM, plot_EM_results_exp, plot_fit_p
 from basic.select import get_files, select_folder
 import scipy.io as sio
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.mixture import GaussianMixture
+
 
 def GMM_results(data, n_components, tolerance=10e-5):
     ### fit GMM
-    m_save, s_save, f_save, label, data_cluster = GMM(data, n_components, tolerance=tolerance)
+    m_save, s_save, f_save, label, data_cluster, BIC = GMM(data, n_components, tolerance=tolerance)
     ##  plot EM results(mean, std, fractio with iteration)
-    plot_EM_results(m_save, s_save, f_save)
+    # plot_EM_results(m_save, s_save, f_save)
     ##  plot data histogram and its gaussian EM (GMM) results
-    plot_fit_gauss(step, f_save[-1,:], m_save[-1,:], s_save[-1,:])
+    # plot_fit_gauss(step, f_save[-1,:], m_save[-1,:], s_save[-1,:])
 
-    return f_save[-1,:], m_save[-1,:] ,s_save[-1,:]
+    return f_save[-1,:], m_save[-1,:] ,s_save[-1,:], data_cluster, label, BIC
 
 def poiEM_results(data, n_components, tolerance=10e-5):
     ##  fit EM
@@ -30,7 +33,7 @@ def poiEM_results(data, n_components, tolerance=10e-5):
 
 
 # conc = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
-conc = [0.0, 0.5]
+conc = [0.0, 0.5, 1.0]
 
 path_folder = select_folder()
 all_step = []
@@ -41,7 +44,7 @@ n_components_p = 1
 centers = []
 stds = []
 fractions = []
-
+# name = f'S5S1_{c}
 all_tau = []
 all_ftau = []
 for c in conc:
@@ -53,18 +56,46 @@ for c in conc:
         step = np.append(step, data['step'])
         dwell = np.append(dwell, [data['dwell']])
 
+    BICs = []
+    BIC_owns = []
+    n_clusters = np.arange(1, 5)
+    X = step.reshape(-1,1)
+    for c in n_clusters:
+        model = GaussianMixture(n_components=c, tol=1e-3)
+        model.fit(X)
+        label = model.predict(X)
+        BICs += [model.bic(X)]
+        f, m, s, data_cluster, label_own, BIC_own = GMM_results(step, c, tolerance=1e-3)
+        BIC_owns += [BIC_own]
+
+    plt.figure()
+    plt.plot(n_clusters, BICs,'o')
+    plt.title('BIC')
+    plt.xlabel('n_components')
+    plt.ylabel('BIC')
+
+    plt.figure()
+    plt.plot(n_clusters, BIC_owns,'o')
+    plt.title('BIC_owns')
+    plt.xlabel('n_components')
+    plt.ylabel('BIC_owns')
     all_step += [step]
     all_dwell += [dwell]
     ### get GMM results
-    f, m, s = GMM_results(step, n_components_g, tolerance=10e-5)
-    centers += [m]
-    stds += [s]
-    fractions += [f]
+    # step = step[step < 11]
+    f, m, s, data_cluster, label_own, BIC_own= GMM_results(step, n_components_g, tolerance=10e-5)
+    # plt.figure()
+    # for data in data_cluster:
+    #     plt.plot(data, np.zeros(len(data)), 'o')
+
+    # centers += [m]
+    # stds += [s]
+    # fractions += [f]
 
     ### get poisson EM results
-    f_tau, tau = poiEM_results(dwell, n_components_p, tolerance=10e-5)
-    all_tau += [tau]
-    all_ftau += [f_tau]
+    # f_tau, tau = poiEM_results(dwell, n_components_p, tolerance=10e-5)
+    # all_tau += [tau]
+    # all_ftau += [f_tau]
 
 
 
