@@ -21,8 +21,8 @@ def exp_EM(data, n_components, tolerance=10e-5):
     f_save = []
     while (j < 10 or improvement > tolerance) and j < 5000:
         tau_save, f_save = collect_EM_results([tau_save, tau], [f_save, f])
-        likelihood = weighting(data, tau, f)
-        tau, f = update_tau_f(likelihood, data)
+        prior_prob = weighting(data, tau, f)
+        tau, f = update_tau_f(prior_prob, data)
         improvement = cal_improvement([tau_save[-n_components:], tau], [f_save[-n_components:], f])
         j += 1
     f_save = np.reshape(f_save, (j, n_components))
@@ -41,18 +41,10 @@ def init(data, n_components):
 def exp_pdf(t, args):
     f = np.array(args[0])
     tau = np.array(args[1])
-    try:
-        n_col = len(t)
-    except:
-        n_col = 1
-    try:
-        n_row = len(f)
-    except:
-        n_row = 1
-    y = np.zeros((n_row, n_col))
-    for i in range(n_row):
-        y[i,:] = f[i] * 1/tau[i]*np.exp(-t/tau[i])
-    return y
+    y = []
+    for f,tau in zip(f,tau):
+        y += [f * 1 / tau * np.exp(-t / tau)]
+    return np.array(y)
 
 def ln_exp_pdf(t, tau):
     lny = -np.log(tau) - t/tau
@@ -60,14 +52,16 @@ def ln_exp_pdf(t, tau):
 
 ##  calculate the probability belonging to each cluster, (m,s)
 def weighting(data, tau, f):
-    n_components = len(tau)
-    # f = np.ones(n_components)/n_components
-    n_sample = len(data)
-    likelihood = np.zeros((n_components, n_sample))
-    for i, x in enumerate(data):
-        p = exp_pdf(x, [f,tau])
-        likelihood[:, i] = (p / sum(p)).ravel()
-    return likelihood
+    # n_components = len(tau)
+    # # f = np.ones(n_components)/n_components
+    # n_sample = len(data)
+    # likelihood = np.zeros((n_components, n_sample))
+    # for i, x in enumerate(data):
+    #     p = exp_pdf(x, [f,tau])
+    #     likelihood[:, i] = (p / sum(p)).ravel()
+    p = exp_pdf(data, [f, tau])
+    prior_prob = p / sum(p)
+    return prior_prob
 
 ##  update mean, std and fraction using matrix multiplication, (n_feture, n_sample) * (n_sample, 1) = (n_feture, 1)
 def update_tau_f(likelihood, data):
@@ -205,10 +199,11 @@ if __name__ == "__main__":
             0.105,
             0.0975,
             ]
+    data = np.array(data)
     n_sample = len(data)
 
     ##  fit EM
-    n_components = 2
+    n_components = 5
     f_save, tau_save = exp_EM(data, n_components, tolerance=10e-5)
 
     ##  plot EM results(mean, std, fractio with iteration)
