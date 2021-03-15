@@ -7,6 +7,8 @@ from basic.binning import binning
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+from sklearn.cluster import KMeans
+
 
 ##  args: list of parameters, x: np array
 def oneD_gaussian(x, args):
@@ -30,15 +32,15 @@ def log_oneD_gaussian(x, args):
     s = np.array(args[2])
     lny = []
     for f, xm, s in zip(f, xm, s):
-        if s <= 1.0:
-            s = 1.0
+        if s <= 0:
+            s = 0.01
         lny += [np.log(f) - np.log(s*np.sqrt(2*math.pi)) - (x-xm)**2/2/s**2]
     return np.array(lny)
 
 ##  plot data histogram and its gaussian EM (GMM) results
 def plot_fit_gauss(data, f, m, s):
     n_components = len(m)
-    bin_number = np.log2(len(data)).astype('int') + 8
+    bin_number = np.log2(len(data)).astype('int') + 5
     pd, center = binning(data, bin_number) # plot histogram
     data_std_new = np.std(data, ddof=1)
     x = np.arange(0, max(data)+data_std_new, 0.05)
@@ -51,7 +53,7 @@ def plot_fit_gauss(data, f, m, s):
 
 def GMM(data, n_components, tolerance=10e-5):
     ##  initialize EM parameters
-    m, s, f = init_GMM(data, n_components=n_components)
+    f, m, s = init_GMM(data, n_components=n_components)
     j = 0
     m_save = []
     s_save = []
@@ -75,12 +77,23 @@ def GMM(data, n_components, tolerance=10e-5):
 
     ##  initialize mean, std and fraction of gaussian
 def init_GMM(data, n_components):
-    mean = np.mean(data)
-    std = np.std(data, ddof=1)
-    m = np.arange(mean-1.5*std, mean+1.5*std+1, 3*std/(n_components-1))
-    s = np.array([std]*n_components)
-    f = np.ones(n_components) / n_components
-    return m, s, f
+    n_sample = len(data)
+    data = data.reshape((-1,1))
+    kmeans = KMeans(n_clusters=n_components).fit(data)
+    labels = kmeans.labels_
+    data_cluster = [data[labels == i] for i in range(n_components)]
+    m = np.array([np.mean(data) for data in data_cluster])
+    index = np.argsort(m)
+    
+    f = np.array([len(data)/n_sample for data in data_cluster])[index]
+    m = m[index]
+    s = np.array([np.std(data, ddof=1) for data in data_cluster])[index]
+    
+    # m = np.linspace(mean-1.5*std, mean+0.5*std, n_components)
+    # # m = np.arange(mean-1.5*std, mean+1.5*std+1, 3*std/(n_components-1))
+    # s = np.array([std]*n_components)
+    # f = np.ones(n_components) / n_components
+    return f, m, s
 
 ##  calculate the probability belonging to each cluster, (m,s)
 def weighting(data, m, s, f):
@@ -136,12 +149,12 @@ def reshape_all(*args, n_components):
     results = []
     n_sample = int(len(args[0])/n_components)
     for arg in args:
-        results += [np.reshape(arg, (n_sample, n_components))]
+        results += [np.reshape(arg, (int(len(arg)/n_components), n_components))]
     return results
 
 if __name__ == '__main__':
     n_sample = 200
-    data = gen_gauss(mean=[5,10], std=[2,2], n_sample=[n_sample]*2)
+    data = gen_gauss(mean=[5,10], std=[2,4], n_sample=[n_sample]*2)
 
     ##  fit GMM
     n_components = 2

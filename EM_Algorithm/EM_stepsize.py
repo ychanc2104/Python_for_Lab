@@ -5,9 +5,13 @@ Created on Wed Mar 10 13:48:42 2021
 from matplotlib import rcParams
 rcParams["font.family"] = "sans-serif"
 rcParams["font.sans-serif"] = ["Arial"]
-
 from EM_Algorithm.EM_test_GMM import GMM, plot_EM_results, plot_fit_gauss
 import numpy as np
+
+
+
+
+
 
 
 
