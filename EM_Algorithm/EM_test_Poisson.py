@@ -1,140 +1,7 @@
-from matplotlib import rcParams
-rcParams["font.family"] = "sans-serif"
-rcParams["font.sans-serif"] = ["Arial"]
-# import matplotlib
-# matplotlib.rc('font', family='sans-serif')
-# matplotlib.rc('font', serif='Arial')
-# matplotlib.rc('text', usetex='false')
-# matplotlib.rcParams.update({'font.size': 18})
+
 from EM_Algorithm.gen_poisson import gen_poisson
-from EM_Algorithm.EM_test_GMM import collect_EM_results, cal_improvement
-from basic.binning import binning
 import numpy as np
-import matplotlib.pyplot as plt
-
-def exp_EM(data, n_components, tolerance=10e-5):
-    f, tau = init(data, n_components=n_components)
-    improvement = 10
-    j = 0
-    f = np.ones(n_components) / n_components
-    tau_save = []
-    f_save = []
-    while (j < 10 or improvement > tolerance) and j < 5000:
-        tau_save, f_save = collect_EM_results([tau_save, tau], [f_save, f])
-        prior_prob = weighting(data, tau, f)
-        tau, f = update_tau_f(prior_prob, data)
-        improvement = cal_improvement([tau_save[-n_components:], tau], [f_save[-n_components:], f])
-        j += 1
-    f_save = np.reshape(f_save, (j, n_components))
-    tau_save = np.reshape(tau_save, (j, n_components))
-    label = get_label(data, prior_prob)
-    data_cluster = [data[label == i] for i in range(n_components)]
-    ln_likelihood = [sum(ln_exp_pdf(data, args=[f, tau])[i]) for i, data in enumerate(data_cluster)]
-    ln_likelihood = sum(ln_likelihood)
-    BIC = -2 * ln_likelihood + (n_components * 3 - 1) * np.log(len(data))
-    AIC = -2 * ln_likelihood + (n_components * 3 - 1) * 2
-
-    return f_save, tau_save, BIC, AIC
-
-##  initialize parameters
-def init(data, n_components):
-        mean = np.mean(data)
-        std = np.std(data, ddof=1)
-        f = np.ones(n_components) / n_components
-        tau = np.linspace(abs(mean - 0.5 * std), mean + 0.5 * std + 1, n_components)
-        return f, tau
-
-def get_label(data, prior_prob):
-    label = []
-    for i, x in enumerate(data):
-        p = prior_prob[:, i]
-        label += [np.argmax(p)]
-    label = np.array(label)
-    return label
-
-
-
-##  args: list
-def exp_pdf(t, args):
-    f = np.array(args[0])
-    tau = np.array(args[1])
-    y = []
-    for f,tau in zip(f,tau):
-        y += [f * 1 / tau * np.exp(-t / tau)]
-    return np.array(y)
-
-def ln_exp_pdf(t, args):
-    f = np.array(args[0])
-    tau = np.array(args[1])
-    lny = []
-    for f,tau in zip(f,tau):
-        lny += [np.log(f/tau) - t/tau]
-    return np.array(lny)
-
-def log_oneD_gaussian(x, args):
-    f = np.array(args[0])
-    xm = np.array(args[1])
-    s = np.array(args[2])
-    lny = []
-    for f, xm, s in zip(f, xm, s):
-        if s <= 1.0:
-            s = 1.0
-        lny += [np.log(f) - np.log(s*np.sqrt(2*math.pi)) - (x-xm)**2/2/s**2]
-    return np.array(lny)
-
-##  calculate the probability belonging to each cluster, (m,s)
-def weighting(data, tau, f):
-    # n_components = len(tau)
-    # # f = np.ones(n_components)/n_components
-    # n_sample = len(data)
-    # likelihood = np.zeros((n_components, n_sample))
-    # for i, x in enumerate(data):
-    #     p = exp_pdf(x, [f,tau])
-    #     likelihood[:, i] = (p / sum(p)).ravel()
-    p = exp_pdf(data, [f, tau])
-    prior_prob = p / sum(p)
-    return prior_prob
-
-##  update mean, std and fraction using matrix multiplication, (n_feture, n_sample) * (n_sample, 1) = (n_feture, 1)
-def update_tau_f(likelihood, data):
-    n_sample = len(data)
-    tau = np.matmul(likelihood, data) / np.sum(likelihood, axis=1)
-    f = np.sum(likelihood, axis=1) / n_sample
-    return tau, f
-
-def plot_EM_results_exp(results, labels):
-    n_components = len(results)
-    fig, axs = plt.subplots(n_components, sharex=True)
-    axs[-1].set_xlabel('iteration', fontsize=15)
-    for i in range(n_components):
-        plot_EM_result(results[i], axs[i], ylabel=f'{labels[i]}')
-
-##  result: (iteration, n_components)
-def plot_EM_result(result, ax, xlabel='iteration', ylabel='value'):
-    iteration = result.shape[0]
-    n_components = result.shape[1]
-    for i in range(n_components):
-        ax.plot(np.arange(0, iteration), result[:, i], '-o')
-    ax.set_ylabel(f'{ylabel}', fontsize=15)
-
-##  plot data histogram and its gaussian EM (GMM) results, results:
-def plot_fit_pdf(data, function, results):
-    n_sample = len(data)
-    n_components = len(results[0])
-    # bin_width = (12/n_sample)**(1/3)*np.mean(data)/n_components**1.3 ## scott's formula for poisson process
-    bin_width = (12/n_sample)**(1/3)*np.mean(data) ## scott's formula for poisson process
-    bin_number = int((max(data)-min(data))/bin_width)
-    pd, center = binning(data, bin_number) # plot histogram
-    data_std_new = np.std(data, ddof=1)
-    x = np.arange(0.1, max(data) + data_std_new, 0.01)
-    y_fit = function(x, results)
-    for i in range(n_components):
-        plt.plot(x, y_fit[i,:], '-')
-    plt.plot(x, sum(y_fit), '-')
-    plt.xlabel('dwell time (s)', fontsize=15)
-    plt.ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
-    plt.xlim([0, np.mean(data)*4])
-
+from EM_Algorithm.EM import EM
 
 if __name__ == "__main__":
     ##  produce data
@@ -232,36 +99,46 @@ if __name__ == "__main__":
             0.0975,
             ]
     data = np.array(data)
+    data = gen_poisson(tau=[0.1, 2], n_sample=[2000, 2000])
+
     n_sample = len(data)
     tolerance = 1e-5
-    ##  find best n_conponents
-    BICs = []
-    BIC_owns = []
-    AIC_owns = []
-    n_clusters = np.arange(1, 5)
-    for c in n_clusters:
-        f_save, tau_save, BIC, AIC = exp_EM(data, n_components=c, tolerance=tolerance)
-        BIC_owns += [BIC]
-        AIC_owns += [AIC]
+    ##  fit Poisson EM
+    EM = EM(data)
+    n_components = 2
+    f, tau, s, labels, data_cluster = EM.PEM(n_components)
+    EM.plot_EM_results()
+    EM.plot_fit_exp()
 
-    plt.figure()
-    plt.plot(n_clusters, BIC_owns, 'o')
-    plt.title('BIC_owns')
-    plt.xlabel('n_components')
-    plt.ylabel('BIC_owns')
 
-    plt.figure()
-    plt.plot(n_clusters, AIC_owns, 'o')
-    plt.title('AIC_owns')
-    plt.xlabel('n_components')
-    plt.ylabel('AIC_owns')
-
-    ##  fit EM
-    n_components = n_clusters[np.argmin(AIC_owns)]
-    f_save, tau_save, BIC, AIC = exp_EM(data, n_components, tolerance=tolerance)
-
-    ##  plot EM results(mean, std, fractio with iteration)
-    plot_EM_results_exp([f_save, tau_save], ['fraction', 'dwell time'])
-
-    ##  plot data histogram and its gaussian EM (GMM) results
-    plot_fit_pdf(data, exp_pdf, [f_save[-1,:], tau_save[-1,:]])
+    # ##  find best n_conponents
+    # BICs = []
+    # BIC_owns = []
+    # AIC_owns = []
+    # n_clusters = np.arange(1, 5)
+    # for c in n_clusters:
+    #     f_save, tau_save, BIC, AIC = exp_EM(data, n_components=c, tolerance=tolerance)
+    #     BIC_owns += [BIC]
+    #     AIC_owns += [AIC]
+    #
+    # plt.figure()
+    # plt.plot(n_clusters, BIC_owns, 'o')
+    # plt.title('BIC_owns')
+    # plt.xlabel('n_components')
+    # plt.ylabel('BIC_owns')
+    #
+    # plt.figure()
+    # plt.plot(n_clusters, AIC_owns, 'o')
+    # plt.title('AIC_owns')
+    # plt.xlabel('n_components')
+    # plt.ylabel('AIC_owns')
+    #
+    # ##  fit EM
+    # n_components = n_clusters[np.argmin(AIC_owns)]
+    # f_save, tau_save, BIC, AIC = exp_EM(data, n_components, tolerance=tolerance)
+    #
+    # ##  plot EM results(mean, std, fractio with iteration)
+    # plot_EM_results_exp([f_save, tau_save], ['fraction', 'dwell time'])
+    #
+    # ##  plot data histogram and its gaussian EM (GMM) results
+    # plot_fit_pdf(data, exp_pdf, [f_save[-1,:], tau_save[-1,:]])
