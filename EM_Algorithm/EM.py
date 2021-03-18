@@ -12,13 +12,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 import math
 from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
 
 ### data: (n,1)-array
 class EM:
     def __init__(self, data):
-        self.data = data
+        self.data = data.reshape(-1, 1)
 
-    def GMM(self, n_components, tolerance=10e-5):
+    def skGMM(self, n_components, tolerance=10e-5):
+        # self.n_components = n_components
+        data = self.data
+        n_sample = len(data)
+
+        gmm = GaussianMixture(n_components=n_components, tol=tolerance).fit(data)
+        labels = gmm.predict(data)
+        data_cluster = [data[labels == i] for i in range(n_components)]
+        p = gmm.predict_proba(data).T
+        f = np.sum(p, axis=1) / n_sample
+        m = np.matmul(p, data).ravel() / np.sum(p, axis=1)
+        s = np.sqrt(np.matmul(p, data ** 2).ravel() / (np.sum(p, axis=1)) - m ** 2)
+        self.f_sk = f.reshape(1, n_components)
+        self.m_sk = m.reshape(1, n_components)
+        self.s_sk = s.reshape(1, n_components)
+        return f, m, s, labels, data_cluster
+
+
+    def GMM(self, n_components, tolerance=1e-2):
         """EM algorithm with pdf=Gaussian (GMM)
         Parameters
         ----------
@@ -33,14 +52,15 @@ class EM:
         """
         ## (f,m,s) are growing array
         data = self.data
+        self.tolerance = tolerance
         ##  initialize EM parameters
         f, m, s, loop, improvement = self.init_GMM(n_components=n_components)
-        while (loop < 100 or improvement > tolerance) and loop < 5000:
-            # prior_prob = self.__weighting(f, m, s)
-            prior_prob = self.__weighting(f, m, s, function=oneD_gaussian)
+        while (loop < 10 or improvement > tolerance) and loop < 500:
+            prior_prob = self.__weighting(f, m, s, function=ln_oneD_gaussian)
             f, m, s = self.__update_f_m_s(prior_prob, f, m, s)
             improvement = self.__cal_improvement(f, m, s)
             loop += 1
+        self.__weighting(f, m, s, function=ln_oneD_gaussian) # update prior prob
         f, m, s = self.__reshape_all(f, m, s, n_rows=loop+1, n_cols=n_components)
         self.f = f
         self.m = m
@@ -50,6 +70,8 @@ class EM:
 
     def PEM(self, n_components, tolerance=10e-5):
         data = self.data
+        self.tolerance = tolerance
+
         f, tau, s, loop, improvement = self.init_PEM(n_components=n_components)
         while (loop < 10 or improvement > tolerance) and loop < 5000:
             prior_prob = self.__weighting(f, tau, function=exp_pdf)
@@ -62,19 +84,6 @@ class EM:
         self.s = s
         labels, data_cluster, ln_likelihood = self.predict(data)
         return f, tau, s, labels, data_cluster
-
-    ##  initialize parameters
-    def init_PEM(self, n_components):
-        data = self.data
-        self.n_components = n_components
-        mean = np.mean(data)
-        std = np.std(data, ddof=1)
-        f = np.ones(n_components) / n_components
-        tau = np.linspace(abs(mean - 0.5 * std), mean + 0.5 * std, n_components)
-        s = tau.copy()
-        loop = 0
-        improvement = 10
-        return f, tau, s, loop, improvement
 
     def plot_EM_results(self):
         f = self.f
@@ -127,16 +136,81 @@ class EM:
         plt.xlabel('step size (nm)', fontsize=15)
         plt.ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
 
+    def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False):
+        ##  find best n_conponents
+        data = self.data
+        BICs = []
+        AICs = []
+        BIC_owns = []
+        AIC_owns = []
+        LLE = []
+        n_clusters = np.arange(1, 6)
+        for c in n_clusters:
+            if mode == 'GMM':
+                f, tau, s, labels, data_cluster = self.GMM(n_components=c, tolerance=tolerance)
+                gmm = GaussianMixture(n_components=c, tol=tolerance).fit(data)
+            else:
+                f, tau, s, labels, data_cluster = self.PEM(n_components=c, tolerance=tolerance)
+            BICs += [gmm.bic(data)]
+            AICs += [gmm.aic(data)]
+            BIC_owns += [self.BIC()]
+            AIC_owns += [self.AIC()]
+            LLE += [self.ln_likelihood]
+        if figure == True:
+            plt.figure()
+            plt.plot(n_clusters, BIC_owns, 'o')
+            plt.title('BIC_owns')
+            plt.xlabel('n_components')
+            plt.ylabel('BIC_owns')
+            plt.figure()
+            plt.plot(n_clusters, AIC_owns, 'o')
+            plt.title('AIC_owns')
+            plt.xlabel('n_components')
+            plt.ylabel('AIC_owns')
+
+        ##  get optimal components
+        if criteria=='AIC':
+            opt_components = n_clusters[np.argmin(AIC_owns)]
+        else:
+            opt_components = n_clusters[np.argmin(BIC_owns)]
+        self.LLE = LLE
+        self.BICs = BICs
+        self.AICs = AICs
+        self.BIC_owns = BIC_owns
+        self.AIC_owns = AIC_owns
+        return opt_components
+
+
     ##  get predicted data_cluster and its log-likelihood
     def predict(self, data):
-        f = self.f[-1,:]
+        """predict data cluster
+        Parameters
+        ----------
+        ln_likelihood : int
+            Number of components.
+        tolerance : float
+            Convergence criteria
+        data : array (n_samples,1)
+
+        prior_prob: array (n_components, n_sample)
+
+        Returns
+        -------
+
+        """
+
+        f = self.f[-1, :]
         m = self.m[-1, :]
         s = self.s[-1, :]
-        n_components = self.n_components
-        prior_prob = self.prior_prob
+
+        n_components = len(f)
+        # prior_prob = self.prior_prob
+        p = np.exp(ln_oneD_gaussian(data, args=[f,m,s])) ##(n_components, n_samples)
+        prior_prob = p / sum(p)
         labels = np.array([np.argmax(prior_prob[:, i]) for i in range(len(data))])  ## find max of prob
         data_cluster = [data[labels == i] for i in range(n_components)]
-        ln_likelihood = sum([sum(log_oneD_gaussian(data, args=[f, m, s])[i]) for i, data in enumerate(data_cluster)])
+        ln_likelihood = sum([np.log(sum(np.exp(ln_oneD_gaussian(data[i], args=[f, m, s]).ravel()))) for i in range(len(data))])
+
         self.ln_likelihood = ln_likelihood
         return labels, data_cluster, ln_likelihood
 
@@ -153,7 +227,7 @@ class EM:
         BIC = -2 * ln_likelihood + (n_components * 3 - 1) * np.log(n_samples)
         return BIC
 
-    ##  initialize mean, std and fraction of gaussian
+    ##  initialize mean, std and fraction for GMM
     def init_GMM(self, n_components):
         self.n_components = n_components
         data = self.data.reshape((-1, 1))
@@ -161,6 +235,19 @@ class EM:
         loop = 0
         improvement = 10
         return f, m, s, loop, improvement
+
+    ##  initialize parameters for Poisson EM
+    def init_PEM(self, n_components):
+        data = self.data
+        self.n_components = n_components
+        mean = np.mean(data)
+        std = np.std(data, ddof=1)
+        f = np.ones(n_components) / n_components
+        tau = np.linspace(abs(mean - 0.5 * std), mean + 0.5 * std, n_components)
+        s = tau.copy()
+        loop = 0
+        improvement = 10
+        return f, tau, s, loop, improvement
 
     def __get_f_m_s_kmeans(self, data):
         n_sample = len(data)
@@ -196,44 +283,42 @@ class EM:
         para = []
         for arg in args:
             para += [arg[-n_components:]]
-        p = function(data, args=para) ##(n_components, n_samples)
+        p = np.exp(function(data, args=para)) ##(n_components, n_samples)
         prior_prob = p / sum(p)
         self.p = p
         self.prior_prob = prior_prob
         return prior_prob
 
-    # ##  calculate the probability belonging to each cluster, (m,s)
-    # def __weighting(self, f, m, s):
-    #     """Calculate prior probability of each data point
-    #     Parameters
-    #     ----------
-    #     f, m, s : growing array, (n,)
-    #         fractions, mean, std
-    #     n_components : int
-    #         Number of components.
-    #     Returns
-    #     -------
-    #     prior_prob : array, (n_components, n_samples)
-    #
-    #     """
-    #     data = self.data
-    #     n_components = self.n_components
-    #     f = f[-n_components:]
-    #     m = m[-n_components:]
-    #     s = s[-n_components:]
-    #     p = oneD_gaussian(data, args=[f, m, s]) ##(n_components, n_samples)
-    #     prior_prob = p / sum(p)
-    #     self.p = p
-    #     self.prior_prob = prior_prob
-    #     return prior_prob
 
     ##  update mean, std and fraction using matrix multiplication, (n_feture, n_sample) * (n_sample, 1) = (n_feture, 1)
     def __update_f_m_s(self, prior_prob, f, m, s):
+        """M-step
+        Parameters
+        ----------
+        f, m, s : growing array, (n,)
+            fractions, mean, std
+        n_components : int
+            Number of components.
+        data(n_sample, 1) - m(n_components,) : array, (n_sample, n_components)
+        Returns
+        -------
+        prior_prob : array, (n_components, n_samples)
+
+        """
+
         data = self.data
         n_sample = len(data)
+        n_components = self.n_components
+
         f_new = np.sum(prior_prob, axis=1) / n_sample
         m_new = np.matmul(prior_prob, data).ravel() / np.sum(prior_prob, axis=1)
-        s_new = np.sqrt( np.matmul(prior_prob, data ** 2).ravel()/np.sum(prior_prob, axis=1) - m_new**2 )
+        # s_new = np.sqrt( np.diagonal(np.matmul((data-m_new).T, (data-m)))/len(data) )
+
+        # labels = np.array([np.argmax(prior_prob[:, i]) for i in range(len(data))])  ## find max of prob
+        # data_cluster = [data[labels == i] for i in range(n_components)]
+        # s_new = np.array([np.std(data, ddof=1) for data in data_cluster])
+        s_new = np.sqrt( np.matmul(prior_prob, data ** 2).ravel()/(np.sum(prior_prob, axis=1)) - m_new**2 )
+
         f, m, s = self.__append_arrays([f,f_new], [m,m_new], [s,s_new])
         self.f = f
         self.m = m
@@ -297,21 +382,21 @@ def oneD_gaussian(x, args):
     s = np.array(args[2])
     y = []
     for f, xm, s in zip(f, xm, s):
-        if s <= 0:
-            s = 0.01
+        # if s > 1:
+        #     s = 1
         y += [f*1/s/np.sqrt(2*math.pi)*np.exp(-(x-xm)**2/2/s**2)]
     y = np.array(y)
     return y.reshape(y.shape[0], y.shape[1])
 
-def log_oneD_gaussian(x, args):
+def ln_oneD_gaussian(x, args):
     f = np.array(args[0])
     xm = np.array(args[1])
     s = np.array(args[2])
     lny = []
     for f, xm, s in zip(f, xm, s):
-        if s <= 0:
-            s = 0.01
-        lny += [np.log(f) - np.log(s*np.sqrt(2*math.pi)) - (x-xm)**2/2/s**2]
+        # if s > 1:
+        #     s = 1
+        lny += [np.log(f) - np.log(s) - 1/2*np.log(2*math.pi) - (x-xm)**2/2/s**2]
     lny = np.array(lny)
     return lny.reshape(lny.shape[0], lny.shape[1])
 
