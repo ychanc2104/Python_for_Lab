@@ -92,8 +92,9 @@ def get_data_from_excel(path_folder, sheet_names, excel_name, axis):
     return df_attrs_dict
 
 
-excel_name = 'snapshot-fitresults_reshape_analyzed.xlsx'
-
+# excel_name = 'snapshot-fitresults_reshape_analyzed.xlsx'
+excel_name = 'fitresults_reshape_analyzed.xlsx'
+#
 path_folder = select_folder()
 df_attrs_dict = get_data_from_excel(path_folder, sheet_names=['med_attrs', 'std_attrs', 'avg_attrs'], excel_name=excel_name, axis=0)
 df_analyzed_dict = get_data_from_excel(path_folder, sheet_names=get_analyzed_sheet_names(), excel_name=excel_name, axis=1)

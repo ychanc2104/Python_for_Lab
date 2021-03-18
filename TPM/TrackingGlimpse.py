@@ -31,9 +31,9 @@ frame_setread_num = 50 # only useful when mode = 0, can't exceed frame number of
 
 criteria_dist = 10 # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
-frame_read_forcenter = 55 # no need to change, frame to autocenter beads
+frame_read_forcenter = 0 # no need to change, frame to autocenter beads
 N_loc = 40 # number of frame to stack and localization
-contrast = 7
+contrast = 3
 low = 40
 high = 120
 blacklevel = 30
