@@ -40,8 +40,7 @@ class BinaryImage:
         self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
         self.path_header_utf8 = self.path_header.encode('utf8')
         self.path_header_txt = os.path.abspath(os.path.join(path_folder, 'header.txt'))
-        self.path_data = [os.path.abspath(x) for x in sorted(glob(os.path.join(self.path_folder, '*.glimpse'))) if
-                          x != self.path_header]
+        self.path_data = self.get_path_data()
         [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
         self.data_type, self.size_a_image, self.frame_per_file = self.getdatainfo()
         self.read_mode = read_mode
@@ -532,6 +531,17 @@ class BinaryImage:
             [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.header
             # header = [frames, height, width, pixeldepth, avg fps]
             return self.header
+
+    ##  remove empty files and sort files by last modified time
+    def get_path_data(self):
+        all_path = [os.path.abspath(x) for x in sorted(glob(os.path.join(self.path_folder, '*.glimpse'))) if
+         x != self.path_header]
+        ##  remove data that size is 0 byte
+        all_path = [path for path in all_path if Path(path).stat().st_size != 0]
+        all_modif_time = [os.path.getmtime(path) for path in all_path]
+        all_path = [all_path[i] for i in np.argsort(all_modif_time)]
+        return all_path
+
 
     def getdatainfo(self):
         ### get file info.
