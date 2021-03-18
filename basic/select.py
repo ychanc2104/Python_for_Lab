@@ -16,7 +16,7 @@ def select_file():
     root = tk.Tk()
     root.withdraw()
     path_file = filedialog.askopenfile()
-    return path_file
+    return path_file.name
 
 def get_files(regex_filename, dialog=True, path_folder=''):
     if dialog==True:
