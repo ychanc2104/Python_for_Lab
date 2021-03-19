@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 import math
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
+from basic.file_io import save_img
+
+
 
 ### data: (n,1)-array
 class EM:
@@ -54,7 +57,7 @@ class EM:
         data = self.data
         self.tolerance = tolerance
         ##  initialize EM parameters
-        f, m, s, loop, improvement = self.init_GMM(n_components=n_components)
+        f, m, s, loop, improvement = self.__init_GMM(n_components=n_components)
         while (loop < 10 or improvement > tolerance) and loop < 500:
             prior_prob = self.__weighting(f, m, s, function=ln_oneD_gaussian)
             f, m, s = self.__update_f_m_s(prior_prob, f, m, s)
@@ -66,75 +69,26 @@ class EM:
         self.m = m
         self.s = s
         labels, data_cluster, ln_likelihood = self.predict(data)
+        self.data_cluster = data_cluster
         return f, m, s, labels, data_cluster
 
-    def PEM(self, n_components, tolerance=10e-5):
+    def PEM(self, n_components, tolerance=1e-2):
         data = self.data
         self.tolerance = tolerance
 
-        f, tau, s, loop, improvement = self.init_PEM(n_components=n_components)
-        while (loop < 10 or improvement > tolerance) and loop < 5000:
-            prior_prob = self.__weighting(f, tau, function=exp_pdf)
+        f, tau, s, loop, improvement = self.__init_PEM(n_components=n_components)
+        while (loop < 10 or improvement > tolerance) and loop < 500:
+            prior_prob = self.__weighting(f, tau, function=ln_exp_pdf)
             f, tau, s = self.__update_f_m_s(prior_prob, f, tau, s)
             improvement = self.__cal_improvement(f, tau)
             loop += 1
+        self.__weighting(f, tau, function=ln_exp_pdf)
         f, tau, s = self.__reshape_all(f, tau, s, n_rows=loop+1, n_cols=n_components)
         self.f = f
         self.m = tau
         self.s = s
-        labels, data_cluster, ln_likelihood = self.predict(data)
+        labels, data_cluster, ln_likelihood = self.predict_p(data)
         return f, tau, s, labels, data_cluster
-
-    def plot_EM_results(self):
-        f = self.f
-        m = self.m
-        s = self.s
-        fig, axs = plt.subplots(3, sharex=True)
-        axs[-1].set_xlabel('iteration', fontsize=15)
-        self.__plot_EM_result(m, axs[0], ylabel='mean')
-        self.__plot_EM_result(s, axs[1], ylabel='std')
-        self.__plot_EM_result(f, axs[2], ylabel='fraction')
-
-    def plot_fit_exp(self):
-        data = self.data
-        f = self.f[-1,:]
-        m = self.m[-1,:]
-        s = self.s[-1,:]
-        n_components = self.n_components
-        n_sample = len(data)
-
-        bin_width = (12/n_sample)**(1/3)*np.mean(data)/n_components**1.3 ## scott's formula for poisson process
-        # bin_width = (12/n_sample)**(1/3)*np.mean(data) ## scott's formula for poisson process
-        bin_number = int((max(data)-min(data))/bin_width)
-        pd, center = binning(data, bin_number)  # plot histogram
-        data_std_new = np.std(data, ddof=1)
-        x = np.arange(0.01, max(data) + data_std_new, 0.01)
-        y_fit = exp_pdf(x, args=[f, m])
-        for i in range(n_components):
-            plt.plot(x, y_fit[i, :], '-')
-        plt.plot(x, sum(y_fit), '-')
-        plt.xlabel('dwell time (s)', fontsize=15)
-        plt.ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
-        plt.xlim([0, np.mean(data)+data_std_new])
-
-    ##  plot data histogram and its gaussian EM (GMM) results
-    def plot_fit_gauss(self):
-        data = self.data
-        f = self.f[-1,:]
-        m = self.m[-1,:]
-        s = self.s[-1,:]
-        n_components = self.n_components
-
-        bin_number = np.log2(len(data)).astype('int') + 3
-        pd, center = binning(data, bin_number)  # plot histogram
-        data_std_new = np.std(data, ddof=1)
-        x = np.arange(0, max(data) + data_std_new, 0.05)
-        y_fit = oneD_gaussian(x, args=[f, m, s])
-        for i in range(n_components):
-            plt.plot(x, y_fit[i, :], '-')
-        plt.plot(x, sum(y_fit), '-')
-        plt.xlabel('step size (nm)', fontsize=15)
-        plt.ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
 
     def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False):
         ##  find best n_conponents
@@ -149,12 +103,13 @@ class EM:
             if mode == 'GMM':
                 f, tau, s, labels, data_cluster = self.GMM(n_components=c, tolerance=tolerance)
                 gmm = GaussianMixture(n_components=c, tol=tolerance).fit(data)
+                BICs += [gmm.bic(data)]
+                AICs += [gmm.aic(data)]
             else:
                 f, tau, s, labels, data_cluster = self.PEM(n_components=c, tolerance=tolerance)
-            BICs += [gmm.bic(data)]
-            AICs += [gmm.aic(data)]
-            BIC_owns += [self.BIC()]
-            AIC_owns += [self.AIC()]
+
+            BIC_owns += [self.__BIC()]
+            AIC_owns += [self.__AIC()]
             LLE += [self.ln_likelihood]
         if figure == True:
             plt.figure()
@@ -214,13 +169,119 @@ class EM:
         self.ln_likelihood = ln_likelihood
         return labels, data_cluster, ln_likelihood
 
-    def AIC(self):
+    ##  get predicted data_cluster and its log-likelihood
+    def predict_p(self, data):
+        """predict data cluster
+        Parameters
+        ----------
+        ln_likelihood : int
+            Number of components.
+        tolerance : float
+            Convergence criteria
+        data : array (n_samples,1)
+
+        prior_prob: array (n_components, n_sample)
+
+        Returns
+        -------
+
+        """
+
+        f = self.f[-1, :]
+        m = self.m[-1, :]
+        s = self.s[-1, :]
+
+        n_components = len(f)
+        p = np.exp(ln_exp_pdf(data, args=[f,m])) ##(n_components, n_samples)
+        prior_prob = p / sum(p)
+        labels = np.array([np.argmax(prior_prob[:, i]) for i in range(len(data))])  ## find max of prob
+        data_cluster = [data[labels == i] for i in range(n_components)]
+        ln_likelihood = sum([np.log(sum(np.exp(ln_exp_pdf(data[i], args=[f, m]).ravel()))) for i in range(len(data))])
+
+        self.ln_likelihood = ln_likelihood
+        return labels, data_cluster, ln_likelihood
+
+    def plot_EM_results(self, save=False, path='output.png'):
+        f = self.f
+        m = self.m
+        s = self.s
+        fig, axs = plt.subplots(3, sharex=True)
+        axs[-1].set_xlabel('iteration', fontsize=15)
+        self.__plot_EM_result(m, axs[0], ylabel='mean')
+        self.__plot_EM_result(s, axs[1], ylabel='std')
+        self.__plot_EM_result(f, axs[2], ylabel='fraction')
+        if save == True:
+            save_img(fig, path)
+        return fig
+
+    def plot_fit_exp(self, xlim=None, ylim=None, save=False, path='output.png'):
+        data = self.data
+        f = self.f[-1,:]
+        m = self.m[-1,:]
+        s = self.s[-1,:]
+        n_components = self.n_components
+        n_sample = len(data)
+
+        bin_width = (12/n_sample)**(1/3)*np.mean(data)/n_components**1.3 ## scott's formula for poisson process
+        # bin_width = (12/n_sample)**(1/3)*np.mean(data) ## scott's formula for poisson process
+        bin_number = int((max(data)-min(data))/bin_width)
+        pd, center, fig = binning(data, bin_number)  # plot histogram
+        data_std_new = np.std(data)
+        x = np.arange(0.01, max(data) + 3*data_std_new, 0.01)
+        y_fit = exp_pdf(x, args=[f, m])
+        for i in range(n_components):
+            plt.plot(x, y_fit[i, :], '-')
+        plt.plot(x, sum(y_fit), 'r-')
+        plt.xlabel('dwell time (s)', fontsize=15)
+        plt.ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
+        # xlim = [0, np.mean(data)+2*data_std_new]
+        plt.xlim(xlim)
+        plt.ylim(ylim)
+        if save == True:
+            save_img(fig, path)
+        return fig
+
+    ##  plot data histogram and its gaussian EM (GMM) results
+    def plot_fit_gauss(self, save=False, path='output.png', scatter=False):
+        data = self.data
+        data_cluster = self.data_cluster
+        f = self.f[-1,:]
+        m = self.m[-1,:]
+        s = self.s[-1,:]
+        n_components = self.n_components
+        data_std_new = np.std(data)
+        x = np.arange(0, max(data) + data_std_new, 0.005)
+        y_fit = oneD_gaussian(x, args=[f, m, s])
+
+        if scatter==False:
+            bin_number = np.log2(len(data)).astype('int') + 3
+            pd, center, fig = binning(data, bin_number)  # plot histogram
+            for i in range(n_components):
+                plt.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
+            plt.plot(x, sum(y_fit), 'r-')
+            plt.xlabel('step size (nm)', fontsize=15)
+            plt.ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
+        else:
+            fig = plt.figure()
+            for i in range(n_components):
+                plt.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
+            plt.plot(x, sum(y_fit), 'r-')
+            plt.xlabel('step size (nm)', fontsize=15)
+            plt.ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
+            for i,x in enumerate(data_cluster):
+                plt.plot(x, np.zeros(len(x)), 'o', markersize=4, color=self.__colors_order()[i])
+
+        if save == True:
+            save_img(fig, path)
+        return fig
+
+    def __AIC(self):
         ln_likelihood = self.ln_likelihood
         n_components = self.n_components
         AIC = -2 * ln_likelihood + (n_components * 3 - 1) * 2
         return AIC
 
-    def BIC(self):
+    def __BIC(self):
         n_samples = len(self.data)
         ln_likelihood = self.ln_likelihood
         n_components = self.n_components
@@ -228,7 +289,7 @@ class EM:
         return BIC
 
     ##  initialize mean, std and fraction for GMM
-    def init_GMM(self, n_components):
+    def __init_GMM(self, n_components):
         self.n_components = n_components
         data = self.data.reshape((-1, 1))
         f, m, s = self.__get_f_m_s_kmeans(data)
@@ -237,11 +298,11 @@ class EM:
         return f, m, s, loop, improvement
 
     ##  initialize parameters for Poisson EM
-    def init_PEM(self, n_components):
+    def __init_PEM(self, n_components):
         data = self.data
         self.n_components = n_components
         mean = np.mean(data)
-        std = np.std(data, ddof=1)
+        std = np.std(data)
         f = np.ones(n_components) / n_components
         tau = np.linspace(abs(mean - 0.5 * std), mean + 0.5 * std, n_components)
         s = tau.copy()
@@ -258,7 +319,7 @@ class EM:
         index = np.argsort(m)
         f = np.array([len(data) / n_sample for data in data_cluster])[index]
         m = m[index]
-        s = np.array([np.std(data, ddof=1) for data in data_cluster])[index]
+        s = np.array([np.std(data) for data in data_cluster])[index]
         self.f_i = f
         self.m_i = m
         self.s_i = s
@@ -269,6 +330,7 @@ class EM:
         """Calculate prior probability of each data point
         Parameters
         ----------
+        function : use log function
         f, m, s : growing array, (n,)
             fractions, mean, std
         n_components : int
@@ -308,15 +370,10 @@ class EM:
 
         data = self.data
         n_sample = len(data)
-        n_components = self.n_components
+        # n_components = self.n_components
 
         f_new = np.sum(prior_prob, axis=1) / n_sample
         m_new = np.matmul(prior_prob, data).ravel() / np.sum(prior_prob, axis=1)
-        # s_new = np.sqrt( np.diagonal(np.matmul((data-m_new).T, (data-m)))/len(data) )
-
-        # labels = np.array([np.argmax(prior_prob[:, i]) for i in range(len(data))])  ## find max of prob
-        # data_cluster = [data[labels == i] for i in range(n_components)]
-        # s_new = np.array([np.std(data, ddof=1) for data in data_cluster])
         s_new = np.sqrt( np.matmul(prior_prob, data ** 2).ravel()/(np.sum(prior_prob, axis=1)) - m_new**2 )
 
         f, m, s = self.__append_arrays([f,f_new], [m,m_new], [s,s_new])
@@ -365,11 +422,13 @@ class EM:
         n_feature = result.shape[1]
         iteration = result.shape[0]
         for i in range(n_feature):
-            ax.plot(np.arange(0, iteration), result[:, i], '-o')
+            ax.plot(np.arange(0, iteration), result[:, i], '-o', color=self.__colors_order()[i])
         ax.set_ylabel(f'{ylabel}', fontsize=15)
 
-
-
+    def __colors_order(self):
+        colors = ['yellowgreen', 'seagreen', 'dodgerblue', 'darkslateblue', 'indigo', 'black']
+        colors = ['green', 'royalblue', 'sienna', 'gray', 'black']
+        return colors
 
 
 ##  args: list of parameters, x: np array
@@ -382,8 +441,8 @@ def oneD_gaussian(x, args):
     s = np.array(args[2])
     y = []
     for f, xm, s in zip(f, xm, s):
-        # if s > 1:
-        #     s = 1
+        if s <= 1:
+            s = 1
         y += [f*1/s/np.sqrt(2*math.pi)*np.exp(-(x-xm)**2/2/s**2)]
     y = np.array(y)
     return y.reshape(y.shape[0], y.shape[1])
@@ -394,8 +453,8 @@ def ln_oneD_gaussian(x, args):
     s = np.array(args[2])
     lny = []
     for f, xm, s in zip(f, xm, s):
-        # if s > 1:
-        #     s = 1
+        if s <= 1:
+            s = 1
         lny += [np.log(f) - np.log(s) - 1/2*np.log(2*math.pi) - (x-xm)**2/2/s**2]
     lny = np.array(lny)
     return lny.reshape(lny.shape[0], lny.shape[1])

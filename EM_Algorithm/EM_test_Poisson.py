@@ -99,16 +99,18 @@ if __name__ == "__main__":
             0.0975,
             ]
     data = np.array(data)
-    data = gen_poisson(tau=[0.1, 2], n_sample=[2000, 2000])
+    data = gen_poisson(tau=[0.5, 2, 10, 30], n_sample=[2000]*4)
 
     n_sample = len(data)
-    tolerance = 1e-5
+    tolerance = 1e-2
     ##  fit Poisson EM
-    EM = EM(data)
-    n_components = 2
-    f, tau, s, labels, data_cluster = EM.PEM(n_components)
-    EM.plot_EM_results()
-    EM.plot_fit_exp()
+    EM_p = EM(data)
+    # n_components = 2
+    n_components_p = EM_p.opt_components(tolerance=1e-2, mode='PEM', criteria='AIC', figure=True)
+    f, tau, s, labels, data_cluster = EM_p.PEM(n_components_p, tolerance)
+    EM_p.plot_EM_results()
+    EM_p.plot_fit_exp(xlim=[0,50], ylim=[0,0.3])
+
 
 
     # ##  find best n_conponents
