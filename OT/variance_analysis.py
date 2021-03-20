@@ -54,9 +54,10 @@ for i,signal in enumerate(signals):
 ### fit all time vs variance(t)
 slope_all = []
 intercept_all = []
-points_tofit = 5
+points_tofit = 15
 t_fit = t[0:points_tofit]
 plt.figure()
+i = 0
 for varX, semX in zip(varX_all, semX_all):
     print(f'analyzing slope of time-variance #{i}')
     varX_fit = varX[0:points_tofit]
@@ -68,6 +69,7 @@ for varX, semX in zip(varX_all, semX_all):
     plt.plot(t, linear_eq(t, slope, intercept), 'r--')
     plt.xlabel('Time (s)', fontsize=22)
     plt.ylabel('Variance ($\mathregular{count^2}$)', fontsize=22)
+    i += 1
 
 ## parameters for average of all fitting slopes and intercepts
 slope = np.mean(slope_all)
