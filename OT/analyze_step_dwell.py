@@ -6,33 +6,9 @@ rcParams["font.sans-serif"] = ["Arial"]
 from basic.select import get_files, select_folder
 import scipy.io as sio
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.mixture import GaussianMixture
 from EM_Algorithm.EM import EM
-
-
-# def GMM_results(data, n_components, tolerance=10e-5):
-#     ### fit GMM
-#     f_save, m_save, s_save, label, data_cluster, BIC, AIC = GMM(data, n_components, tolerance=tolerance)
-#     ##  plot EM results(mean, std, fractio with iteration)
-#     plot_EM_results(m_save, s_save, f_save)
-#     ##  plot data histogram and its gaussian EM (GMM) results
-#     plot_fit_gauss(step, f_save[-1,:], m_save[-1,:], s_save[-1,:])
-#
-#     return f_save[-1,:], m_save[-1,:] ,s_save[-1,:], data_cluster, label, BIC, AIC
-#
-#
-#
-# def poiEM_results(data, n_components, tolerance=10e-5):
-#     ##  fit EM
-#     f_save, tau_save = exp_EM(data, n_components, tolerance=tolerance)
-#     ##  plot EM results(mean, std, fractio with iteration)
-#     plot_EM_results_exp([f_save, tau_save], ['fraction', 'dwell time'])
-#     ##  plot data histogram and its gaussian EM (GMM) results
-#     plot_fit_pdf(dwell, exp_pdf, [f_save[-1,:], tau_save[-1,:]])
-#
-#     return f_save[-1,:], tau_save[-1,:]
-#
+from lifelines import KaplanMeierFitter
+import pandas as pd
 
 if __name__ == '__main__':
         
@@ -49,7 +25,6 @@ if __name__ == '__main__':
     all_centers = []
     all_stds = []
 
-    # name = f'S5S1_{c}
     all_tau = []
     all_ftau = []
     all_stau = []
@@ -80,7 +55,7 @@ if __name__ == '__main__':
         EM_p = EM(dwell)
         n_components_p = EM_p.opt_components(tolerance=1e-2, mode='PEM', criteria='AIC', figure=False)
         f_tau, tau, s_tau, labels, data_cluster = EM_p.PEM(n_components_p)
-        # EM_p.plot_fit_exp()
+        EM_p.plot_fit_exp()
         all_ftau += [f_tau[-1, :]]
         all_tau += [tau[-1, :]]
         all_stau += [s_tau[-1,:]]

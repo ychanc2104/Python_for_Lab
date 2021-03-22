@@ -2,11 +2,7 @@
 from matplotlib import rcParams
 rcParams["font.family"] = "sans-serif"
 rcParams["font.sans-serif"] = ["Arial"]
-# import matplotlib
-# matplotlib.rc('font', family='sans-serif')
-# matplotlib.rc('font', serif='Arial')
-# matplotlib.rc('text', usetex='false')
-# matplotlib.rcParams.update({'font.size': 18})
+# rcParams.update({'font.size': 18})
 from basic.binning import binning
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,7 +10,8 @@ import math
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
 from basic.file_io import save_img
-
+from lifelines import KaplanMeierFitter
+import pandas as pd
 
 
 ### data: (n,1)-array
@@ -114,12 +111,12 @@ class EM:
         if figure == True:
             plt.figure()
             plt.plot(n_clusters, BIC_owns, 'o')
-            plt.title('BIC_owns')
+            plt.title('BIC')
             plt.xlabel('n_components')
             plt.ylabel('BIC_owns')
             plt.figure()
             plt.plot(n_clusters, AIC_owns, 'o')
-            plt.title('AIC_owns')
+            plt.title('AIC')
             plt.xlabel('n_components')
             plt.ylabel('AIC_owns')
 
@@ -214,7 +211,8 @@ class EM:
             save_img(fig, path)
         return fig
 
-    def plot_fit_exp(self, xlim=None, ylim=None, save=False, path='output.png'):
+    ##  plot the survival function
+    def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png'):
         data = self.data
         f = self.f[-1,:]
         m = self.m[-1,:]
@@ -222,21 +220,25 @@ class EM:
         n_components = self.n_components
         n_sample = len(data)
 
-        bin_width = (12/n_sample)**(1/3)*np.mean(data)/n_components**1.3 ## scott's formula for poisson process
-        # bin_width = (12/n_sample)**(1/3)*np.mean(data) ## scott's formula for poisson process
-        bin_number = int((max(data)-min(data))/bin_width)
-        pd, center, fig = binning(data, bin_number)  # plot histogram
+        data_series = pd.Series(data.ravel())
+        E = pd.Series(np.ones(len(data))) ## 1 = death
+        kmf = KaplanMeierFitter()
+        kmf.fit(data_series, event_observed=E)
+        fig, ax = plt.subplots()
+        kmf.plot_survival_function()
+        ax.get_legend().remove() ## remove legend
+
         data_std_new = np.std(data)
         x = np.arange(0.01, max(data) + 3*data_std_new, 0.01)
-        y_fit = exp_pdf(x, args=[f, m])
+        y_fit = exp_survival(x, args=[f, m])
         for i in range(n_components):
-            plt.plot(x, y_fit[i, :], '-')
-        plt.plot(x, sum(y_fit), 'r-')
-        plt.xlabel('dwell time (s)', fontsize=15)
-        plt.ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
+            ax.plot(x, y_fit[i, :], '-')
+        ax.plot(x, sum(y_fit), 'r--')
+        ax.set_xlabel('dwell time (s)', fontsize=15)
+        ax.set_ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
         # xlim = [0, np.mean(data)+2*data_std_new]
-        plt.xlim(xlim)
-        plt.ylim(ylim)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         if save == True:
             save_img(fig, path)
         return fig
@@ -255,21 +257,21 @@ class EM:
 
         if scatter==False:
             bin_number = np.log2(len(data)).astype('int') + 3
-            pd, center, fig = binning(data, bin_number)  # plot histogram
+            pd, center, fig, ax = binning(data, bin_number)  # plot histogram
             for i in range(n_components):
-                plt.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
-            plt.plot(x, sum(y_fit), 'r-')
-            plt.xlabel('step size (nm)', fontsize=15)
-            plt.ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
+                ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
+            ax.plot(x, sum(y_fit), 'r-')
+            ax.set_xlabel('step size (nm)', fontsize=15)
+            ax.set_ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
         else:
-            fig = plt.figure()
+            fig, ax = plt.subplots()
             for i in range(n_components):
-                plt.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
-            plt.plot(x, sum(y_fit), 'r-')
-            plt.xlabel('step size (nm)', fontsize=15)
-            plt.ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
+                ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
+            ax.plot(x, sum(y_fit), 'r--')
+            ax.set_xlabel('step size (nm)', fontsize=15)
+            ax.set_ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
             for i,x in enumerate(data_cluster):
-                plt.plot(x, np.zeros(len(x)), 'o', markersize=4, color=self.__colors_order()[i])
+                ax.plot(x, np.zeros(len(x)), 'o', markersize=4, color=self.__colors_order()[i])
 
         if save == True:
             save_img(fig, path)
@@ -458,6 +460,16 @@ def ln_oneD_gaussian(x, args):
         lny += [np.log(f) - np.log(s) - 1/2*np.log(2*math.pi) - (x-xm)**2/2/s**2]
     lny = np.array(lny)
     return lny.reshape(lny.shape[0], lny.shape[1])
+
+def exp_survival(t, args):
+    f = np.array(args[0])
+    tau = np.array(args[1])
+    y = []
+    for f,tau in zip(f,tau):
+        y += [f * np.exp(-t / tau)]
+    y = np.array(y)
+    return y.reshape(y.shape[0], y.shape[1])
+
 
 ##  args: list
 def exp_pdf(t, args):

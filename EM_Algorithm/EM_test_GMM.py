@@ -14,7 +14,6 @@ if __name__ == '__main__':
     EMg.plot_EM_results()
     EMg.plot_fit_gauss(scatter='True')
 
-
     # f2, m2, s2, labels2, data_cluster2 = EM.skGMM(n_components)
     # EM.plot_fit_gauss()
     opt_components = EMg.opt_components(tolerance=1e-2, mode='GMM', criteria='AIC', figure=False)

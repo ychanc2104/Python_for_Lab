@@ -9,8 +9,8 @@ def binning(data, bin_number, xlabel='value', ylabel='probability density'):
         center += [(edges[i] + edges[i + 1]) / 2]
     binsize = center[1] - center[0]
     pd = count/sum(count)/binsize
-    fig = plt.figure()
-    plt.bar(center, pd, width=binsize, color="grey", edgecolor="white")
-    plt.xlabel(f'{xlabel}', fontsize=15)
-    plt.ylabel(f'{ylabel}', fontsize=15)
-    return pd, center, fig
+    fig, ax = plt.subplots()
+    ax.bar(center, pd, width=binsize, color="grey", edgecolor="white")
+    ax.set_xlabel(f'{xlabel}', fontsize=15)
+    ax.set_ylabel(f'{ylabel}', fontsize=15)
+    return pd, center, fig, ax
