@@ -55,10 +55,10 @@ class EM:
         data = self.data
         self.tolerance = tolerance
         ##  initialize EM parameters
-        f, m, s, loop, improvement = self.__init_GMM(n_components=n_components)
+        f, m, s, loop, improvement = self.__init_GMM(data, n_components=n_components)
         while (loop < 10 or improvement > tolerance) and loop < 500:
             prior_prob = self.__weighting(f, m, s, function=ln_oneD_gaussian)
-            f, m, s = self.__update_f_m_s(prior_prob, f, m, s)
+            f, m, s = self.__update_f_m_s(data, prior_prob, f, m, s)
             improvement = self.__cal_improvement(f, m, s)
             loop += 1
         self.__weighting(f, m, s, function=ln_oneD_gaussian) # update prior prob
@@ -66,8 +66,8 @@ class EM:
         self.f = f
         self.m = m
         self.s = s
-        labels, data_cluster, ln_likelihood = self.predict(data, ln_oneD_gaussian, paras=[f.ravel(), m.ravel(), s.ravel()])
-        self.data_cluster = data_cluster
+        ln_likelihood = self.__cal_LLE(data, function=ln_oneD_gaussian, para=[f[-1].ravel(), m[-1].ravel(), s[-1].ravel()])
+        labels, data_cluster = self.predict(data, ln_oneD_gaussian, paras=[f.ravel(), m.ravel(), s.ravel()])
         return f, m, s, labels, data_cluster
 
     def PEM(self, n_components, tolerance=1e-2):
@@ -75,10 +75,10 @@ class EM:
         data = self.data
         self.tolerance = tolerance
 
-        f, tau, s, loop, improvement = self.__init_PEM(n_components=n_components)
+        f, tau, s, loop, improvement = self.__init_PEM(data, n_components=n_components)
         while (loop < 10 or improvement > tolerance) and loop < 500:
             prior_prob = self.__weighting(f, tau, function=ln_exp_pdf)
-            f, tau, s = self.__update_f_m_s(prior_prob, f, tau, s)
+            f, tau, s = self.__update_f_m_s(data, prior_prob, f, tau, s)
             improvement = self.__cal_improvement(f, tau)
             loop += 1
         self.__weighting(f, tau, function=ln_exp_pdf)
@@ -86,22 +86,24 @@ class EM:
         self.f = f
         self.m = tau
         self.s = s
-        labels, data_cluster, ln_likelihood = self.predict(data, ln_exp_pdf, paras=[f.ravel(), tau.ravel()])
+        ln_likelihood = self.__cal_LLE(data, function=ln_exp_pdf, para=[f[-1].ravel(), tau[-1].ravel()])
+
+        labels, data_cluster = self.predict(data, ln_exp_pdf, paras=[f.ravel(), tau.ravel()])
         return f, tau, s, labels, data_cluster
 
-    def GP_EM(self, n_components, tolerance=1e-2):
+    def GP_EM(self, n_components, tolerance=1e-1):
         data = self.data ## (n_samples, 2)
         x = data[:, 0] ## Gaussian R.V.
         y = data[:, 1] ## Poisson R.V.
         self.tolerance = tolerance
         ##  initialize EM parameters
-        f1, m, s1, loop, improvement = self.__init_GMM(n_components=n_components)
-        f2, tau, s2, loop, improvement = self.__init_PEM(n_components=n_components)
+        f1, m, s1, loop, improvement = self.__init_GMM(data[:,0], n_components=n_components)
+        f2, tau, s2, loop, improvement = self.__init_PEM(data[:,1], n_components=n_components)
         while (loop < 10 or improvement > tolerance) and loop < 500:
             prior_prob = self.__weighting(f1, m, s1, f2, tau, function=ln_gau_exp_pdf)
-            f1, m, s1 = self.__update_f_m_s(prior_prob, f1, m, s1)
-            f2, tau, s2 = self.__update_f_m_s(prior_prob, f2, tau, s2)
-            improvement = self.__cal_improvement(f1, m, s1, f2, tau)
+            f1, m, s1 = self.__update_f_m_s(data[:,0].reshape(-1,1), prior_prob, f1, m, s1)
+            f2, tau, s2 = self.__update_f_m_s(data[:,1].reshape(-1,1), prior_prob, f2, tau, s2)
+            improvement = self.__cal_improvement(m, s1, tau)
             loop += 1
         self.__weighting(f1, m, s1, f2, tau, function=ln_gau_exp_pdf)
         f1, m, s1, f2, tau = self.__reshape_all(f1, m, s1, f2, tau, n_rows=loop+1, n_cols=n_components)
@@ -111,9 +113,11 @@ class EM:
         self.f2 = f2
         self.tau = tau
         self.s2 = s2
+        para = [f1[-1].ravel(), m[-1].ravel(), s1[-1].ravel(), f2[-1].ravel(), tau[-1].ravel()]
+        ln_likelihood = self.__cal_LLE(data, function=ln_gau_exp_pdf, para=para)
 
-        labels, data_cluster, ln_likelihood = self.predict_p(data)
-        return f1, m, s1, f2, tau, labels, data_cluster
+        # labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=[f1,m,s1,f2,tau])
+        return f1, m, s1, f2, tau
 
 
     def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False):
@@ -172,7 +176,7 @@ class EM:
             Number of components.
         tolerance : float
             Convergence criteria
-        data : array (n_samples,1)
+        data : array (n_samples, k)
 
         prior_prob: array (n_components, n_sample)
 
@@ -187,10 +191,11 @@ class EM:
         prior_prob = p / sum(p)
         labels = np.array([np.argmax(prior_prob[:, i]) for i in range(len(data))])  ## find max of prob
         data_cluster = [data[labels == i] for i in range(n_components)]
-        ln_likelihood = sum([np.log(sum(np.exp(function(data[i], args=paras).ravel()))) for i in range(len(data))])
+        self.data_cluster = data_cluster
+        # ln_likelihood = sum([np.log(sum(np.exp(function(data[i], args=paras).ravel()))) for i in range(len(data))])
 
-        self.ln_likelihood = ln_likelihood
-        return labels, data_cluster, ln_likelihood
+        # self.ln_likelihood = ln_likelihood
+        return labels, data_cluster
 
     def plot_EM_results(self, save=False, path='output.png'):
         f = self.f
@@ -274,8 +279,9 @@ class EM:
         return fig, ax
 
     ##  calculate log-likelihood of given parameters, function is log-function
-    def __cal_LLE(self, data, para, function):
-        ln_likelihood = sum([np.log(sum(np.exp(function(data[i,:], args=para).ravel()))) for i in range(len(data))])
+    def __cal_LLE(self, data, function, para):
+        ln_likelihood = sum([np.log(sum(np.exp(function(data[i,:].reshape(1,-1), args=para).ravel()))) for i in range(data.shape[0])])
+        self.ln_likelihood = ln_likelihood
         return ln_likelihood
 
 
@@ -293,17 +299,19 @@ class EM:
         return BIC
 
     ##  initialize mean, std and fraction for GMM
-    def __init_GMM(self, n_components):
+    def __init_GMM(self, data, n_components):
         self.n_components = n_components
-        data = self.data.reshape((-1, 1))
+        data = data.reshape(-1, 1)
+        # data = self.data.reshape((-1, 1))
         f, m, s = self.__get_f_m_s_kmeans(data)
         loop = 0
         improvement = 10
         return f, m, s, loop, improvement
 
     ##  initialize parameters for Poisson EM
-    def __init_PEM(self, n_components):
-        data = self.data
+    def __init_PEM(self, data, n_components):
+        # data = self.data
+        data = data.reshape(-1, 1)
         self.n_components = n_components
         mean = np.mean(data)
         std = np.std(data)
@@ -357,7 +365,7 @@ class EM:
 
 
     ##  update mean, std and fraction using matrix multiplication, (n_feture, n_sample) * (n_sample, 1) = (n_feture, 1)
-    def __update_f_m_s(self, prior_prob, f, m, s):
+    def __update_f_m_s(self, data, prior_prob, f, m, s):
         """M-step
         Parameters
         ----------
@@ -371,12 +379,12 @@ class EM:
         prior_prob : array, (n_components, n_samples)
 
         """
-        data = self.data
+        # data = self.data
         n_sample = len(data)
         # n_components = self.n_components
         f_new = np.sum(prior_prob, axis=1) / n_sample
         m_new = np.matmul(prior_prob, data).ravel() / np.sum(prior_prob, axis=1)
-        s_new = np.sqrt( np.matmul(prior_prob, data ** 2).ravel()/(np.sum(prior_prob, axis=1)) - m_new**2 )
+        s_new = np.sqrt( np.matmul(prior_prob, data**2).ravel()/(np.sum(prior_prob, axis=1)) - m_new**2 )
 
         f, m, s = self.__append_arrays([f,f_new], [m,m_new], [s,s_new])
         self.f = f
@@ -495,34 +503,42 @@ def ln_exp_pdf(t, args):
     return lny.reshape(lny.shape[0], lny.shape[1])
 
 def gau_exp_pdf(data, args):
+    data = data.reshape(-1,2)
     x = data[:, 0]
     t = data[:, 1]
     f1 = np.array(args[0])
     xm = np.array(args[1])
     s1 = np.array(args[2])
-    f2 = np.array(args[3])
     tau = np.array(args[4])
     y = []
-    for f1, xm, s1, f2, tau in zip(f1, xm, s1, f2, tau):
+    for f1, xm, s1, tau in zip(f1, xm, s1, tau):
+        if f1 <= 0.4 or f1 >= 0.6:
+            f1 = 0.4
         if s1 <= 1:
             s1 = 1
-        y += [f1*1/s1/np.sqrt(2 * math.pi)*np.exp(-(x - xm)**2/2/s1**2)*f2*1/tau*np.exp(-t/tau)]
+        if tau <= 0.01:
+            tau = 0.01
+        y += [f1*1/s1/np.sqrt(2 * math.pi)*np.exp(-(x - xm)**2/2/s1**2)*f1*1/tau*np.exp(-t/tau)]
     y = np.array(y)
     return y.reshape(y.shape[0], y.shape[1])
 
 
 def ln_gau_exp_pdf(data, args):
+    data = data.reshape(-1,2)
     x = data[:, 0]
     t = data[:, 1]
     f1 = np.array(args[0])
     xm = np.array(args[1])
     s1 = np.array(args[2])
-    f2 = np.array(args[3])
     tau = np.array(args[4])
     lny = []
-    for f1, xm, s1, f2, tau in zip(f1, xm, s1, f2, tau):
+    for f1, xm, s1, tau in zip(f1, xm, s1, tau):
+        if f1 <= 0.4 or f1 >= 0.6:
+            f1 = 0.4
         if s1 <= 1:
             s1 = 1
-        lny += [np.log(f1)-np.log(s1)-1/2*np.log(2*math.pi)-(x-xm)**2/2/s1**2 + np.log(f2/tau) - t/tau]
+        if tau <= 0.01:
+            tau = 0.01
+        lny += [np.log(f1)-np.log(s1)-1/2*np.log(2*math.pi)-(x-xm)**2/2/s1**2 + np.log(f1/tau) - t/tau]
     lny = np.array(lny)
     return lny.reshape(lny.shape[0], lny.shape[1])
