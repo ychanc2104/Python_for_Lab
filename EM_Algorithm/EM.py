@@ -16,11 +16,11 @@ import pandas as pd
 
 ### data: (n,1)-array
 class EM:
-    def __init__(self, data):
-        self.data = data.reshape(-1, 1)
+    def __init__(self, data, dim=1):
+        self.data = data.reshape(-1, dim)
 
     def skGMM(self, n_components, tolerance=10e-5):
-        # self.n_components = n_components
+        self.n_components = n_components
         data = self.data
         n_sample = len(data)
 
@@ -51,6 +51,7 @@ class EM:
 
         """
         ## (f,m,s) are growing array
+        self.n_components = n_components
         data = self.data
         self.tolerance = tolerance
         ##  initialize EM parameters
@@ -65,11 +66,12 @@ class EM:
         self.f = f
         self.m = m
         self.s = s
-        labels, data_cluster, ln_likelihood = self.predict(data)
+        labels, data_cluster, ln_likelihood = self.predict(data, ln_oneD_gaussian, paras=[f.ravel(), m.ravel(), s.ravel()])
         self.data_cluster = data_cluster
         return f, m, s, labels, data_cluster
 
     def PEM(self, n_components, tolerance=1e-2):
+        self.n_components = n_components
         data = self.data
         self.tolerance = tolerance
 
@@ -84,8 +86,35 @@ class EM:
         self.f = f
         self.m = tau
         self.s = s
-        labels, data_cluster, ln_likelihood = self.predict_p(data)
+        labels, data_cluster, ln_likelihood = self.predict(data, ln_exp_pdf, paras=[f.ravel(), tau.ravel()])
         return f, tau, s, labels, data_cluster
+
+    def GP_EM(self, n_components, tolerance=1e-2):
+        data = self.data ## (n_samples, 2)
+        x = data[:, 0] ## Gaussian R.V.
+        y = data[:, 1] ## Poisson R.V.
+        self.tolerance = tolerance
+        ##  initialize EM parameters
+        f1, m, s1, loop, improvement = self.__init_GMM(n_components=n_components)
+        f2, tau, s2, loop, improvement = self.__init_PEM(n_components=n_components)
+        while (loop < 10 or improvement > tolerance) and loop < 500:
+            prior_prob = self.__weighting(f1, m, s1, f2, tau, function=ln_gau_exp_pdf)
+            f1, m, s1 = self.__update_f_m_s(prior_prob, f1, m, s1)
+            f2, tau, s2 = self.__update_f_m_s(prior_prob, f2, tau, s2)
+            improvement = self.__cal_improvement(f1, m, s1, f2, tau)
+            loop += 1
+        self.__weighting(f1, m, s1, f2, tau, function=ln_gau_exp_pdf)
+        f1, m, s1, f2, tau = self.__reshape_all(f1, m, s1, f2, tau, n_rows=loop+1, n_cols=n_components)
+        self.f1 = f1
+        self.m = m
+        self.s1 = s1
+        self.f2 = f2
+        self.tau = tau
+        self.s2 = s2
+
+        labels, data_cluster, ln_likelihood = self.predict_p(data)
+        return f1, m, s1, f2, tau, labels, data_cluster
+
 
     def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False):
         ##  find best n_conponents
@@ -134,10 +163,11 @@ class EM:
 
 
     ##  get predicted data_cluster and its log-likelihood
-    def predict(self, data):
+    def predict(self, data, function, paras):
         """predict data cluster
         Parameters
         ----------
+        paras : list array, ex:[f,m,s] f,m,s : growing array, (n,)
         ln_likelihood : int
             Number of components.
         tolerance : float
@@ -151,49 +181,13 @@ class EM:
 
         """
 
-        f = self.f[-1, :]
-        m = self.m[-1, :]
-        s = self.s[-1, :]
-
-        n_components = len(f)
-        # prior_prob = self.prior_prob
-        p = np.exp(ln_oneD_gaussian(data, args=[f,m,s])) ##(n_components, n_samples)
+        n_components = self.n_components
+        paras = np.array(paras)[:, -n_components:] ## size to (n_paras, n_components)
+        p = np.exp(function(data, args=paras)) ##(n_components, n_samples)
         prior_prob = p / sum(p)
         labels = np.array([np.argmax(prior_prob[:, i]) for i in range(len(data))])  ## find max of prob
         data_cluster = [data[labels == i] for i in range(n_components)]
-        ln_likelihood = sum([np.log(sum(np.exp(ln_oneD_gaussian(data[i], args=[f, m, s]).ravel()))) for i in range(len(data))])
-
-        self.ln_likelihood = ln_likelihood
-        return labels, data_cluster, ln_likelihood
-
-    ##  get predicted data_cluster and its log-likelihood
-    def predict_p(self, data):
-        """predict data cluster
-        Parameters
-        ----------
-        ln_likelihood : int
-            Number of components.
-        tolerance : float
-            Convergence criteria
-        data : array (n_samples,1)
-
-        prior_prob: array (n_components, n_sample)
-
-        Returns
-        -------
-
-        """
-
-        f = self.f[-1, :]
-        m = self.m[-1, :]
-        s = self.s[-1, :]
-
-        n_components = len(f)
-        p = np.exp(ln_exp_pdf(data, args=[f,m])) ##(n_components, n_samples)
-        prior_prob = p / sum(p)
-        labels = np.array([np.argmax(prior_prob[:, i]) for i in range(len(data))])  ## find max of prob
-        data_cluster = [data[labels == i] for i in range(n_components)]
-        ln_likelihood = sum([np.log(sum(np.exp(ln_exp_pdf(data[i], args=[f, m]).ravel()))) for i in range(len(data))])
+        ln_likelihood = sum([np.log(sum(np.exp(function(data[i], args=paras).ravel()))) for i in range(len(data))])
 
         self.ln_likelihood = ln_likelihood
         return labels, data_cluster, ln_likelihood
@@ -218,15 +212,7 @@ class EM:
         m = self.m[-1,:]
         s = self.s[-1,:]
         n_components = self.n_components
-        n_sample = len(data)
-
-        data_series = pd.Series(data.ravel())
-        E = pd.Series(np.ones(len(data))) ## 1 = death
-        kmf = KaplanMeierFitter()
-        kmf.fit(data_series, event_observed=E)
-        fig, ax = plt.subplots()
-        kmf.plot_survival_function()
-        ax.get_legend().remove() ## remove legend
+        fig, ax = self.__plot_survival(data)
 
         data_std_new = np.std(data)
         x = np.arange(0.01, max(data) + 3*data_std_new, 0.01)
@@ -236,7 +222,6 @@ class EM:
         ax.plot(x, sum(y_fit), 'r--')
         ax.set_xlabel('dwell time (s)', fontsize=15)
         ax.set_ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
-        # xlim = [0, np.mean(data)+2*data_std_new]
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         if save == True:
@@ -276,6 +261,23 @@ class EM:
         if save == True:
             save_img(fig, path)
         return fig
+
+    ##  plot Kaplan_Meier method
+    def __plot_survival(self, data):
+        data_series = pd.Series(data.ravel())
+        E = pd.Series(np.ones(len(data))) ## 1 = death
+        kmf = KaplanMeierFitter()
+        kmf.fit(data_series, event_observed=E)
+        fig, ax = plt.subplots()
+        kmf.plot_survival_function()
+        ax.get_legend().remove() ## remove legend
+        return fig, ax
+
+    ##  calculate log-likelihood of given parameters, function is log-function
+    def __cal_LLE(self, data, para, function):
+        ln_likelihood = sum([np.log(sum(np.exp(function(data[i,:], args=para).ravel()))) for i in range(len(data))])
+        return ln_likelihood
+
 
     def __AIC(self):
         ln_likelihood = self.ln_likelihood
@@ -369,11 +371,9 @@ class EM:
         prior_prob : array, (n_components, n_samples)
 
         """
-
         data = self.data
         n_sample = len(data)
         # n_components = self.n_components
-
         f_new = np.sum(prior_prob, axis=1) / n_sample
         m_new = np.matmul(prior_prob, data).ravel() / np.sum(prior_prob, axis=1)
         s_new = np.sqrt( np.matmul(prior_prob, data ** 2).ravel()/(np.sum(prior_prob, axis=1)) - m_new**2 )
@@ -383,6 +383,10 @@ class EM:
         self.m = m
         self.s = s
         return f, m, s
+
+
+    # def update_gau_poi(self, prior_prob, f1, m, s1, f2,):
+
 
     def __append_arrays(self, *args):
         arrays = []
@@ -487,5 +491,38 @@ def ln_exp_pdf(t, args):
     lny = []
     for f,tau in zip(f,tau):
         lny += [np.log(f/tau) - t/tau]
+    lny = np.array(lny)
+    return lny.reshape(lny.shape[0], lny.shape[1])
+
+def gau_exp_pdf(data, args):
+    x = data[:, 0]
+    t = data[:, 1]
+    f1 = np.array(args[0])
+    xm = np.array(args[1])
+    s1 = np.array(args[2])
+    f2 = np.array(args[3])
+    tau = np.array(args[4])
+    y = []
+    for f1, xm, s1, f2, tau in zip(f1, xm, s1, f2, tau):
+        if s1 <= 1:
+            s1 = 1
+        y += [f1*1/s1/np.sqrt(2 * math.pi)*np.exp(-(x - xm)**2/2/s1**2)*f2*1/tau*np.exp(-t/tau)]
+    y = np.array(y)
+    return y.reshape(y.shape[0], y.shape[1])
+
+
+def ln_gau_exp_pdf(data, args):
+    x = data[:, 0]
+    t = data[:, 1]
+    f1 = np.array(args[0])
+    xm = np.array(args[1])
+    s1 = np.array(args[2])
+    f2 = np.array(args[3])
+    tau = np.array(args[4])
+    lny = []
+    for f1, xm, s1, f2, tau in zip(f1, xm, s1, f2, tau):
+        if s1 <= 1:
+            s1 = 1
+        lny += [np.log(f1)-np.log(s1)-1/2*np.log(2*math.pi)-(x-xm)**2/2/s1**2 + np.log(f2/tau) - t/tau]
     lny = np.array(lny)
     return lny.reshape(lny.shape[0], lny.shape[1])
