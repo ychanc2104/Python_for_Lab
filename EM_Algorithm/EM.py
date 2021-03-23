@@ -12,6 +12,7 @@ from sklearn.mixture import GaussianMixture
 from basic.file_io import save_img
 from lifelines import KaplanMeierFitter
 import pandas as pd
+import random
 
 
 ### data: (n,1)-array
@@ -37,7 +38,7 @@ class EM:
         return f, m, s, labels, data_cluster
 
 
-    def GMM(self, n_components, tolerance=1e-2):
+    def GMM(self, n_components, tolerance=1e-2, rand_init=False):
         """EM algorithm with pdf=Gaussian (GMM)
         Parameters
         ----------
@@ -55,7 +56,7 @@ class EM:
         data = self.data
         self.tolerance = tolerance
         ##  initialize EM parameters
-        f, m, s, loop, improvement = self.__init_GMM(data, n_components=n_components)
+        f, m, s, loop, improvement = self.__init_GMM(data, n_components=n_components, rand_init=rand_init)
         while (loop < 10 or improvement > tolerance) and loop < 500:
             prior_prob = self.__weighting(f, m, s, function=ln_oneD_gaussian)
             f, m, s = self.__update_f_m_s(data, prior_prob, f, m, s)
@@ -70,12 +71,12 @@ class EM:
         labels, data_cluster = self.predict(data, ln_oneD_gaussian, paras=[f.ravel(), m.ravel(), s.ravel()])
         return f, m, s, labels, data_cluster
 
-    def PEM(self, n_components, tolerance=1e-2):
+    def PEM(self, n_components, tolerance=1e-2, rand_init=False):
         self.n_components = n_components
         data = self.data
         self.tolerance = tolerance
 
-        f, tau, s, loop, improvement = self.__init_PEM(data, n_components=n_components)
+        f, tau, s, loop, improvement = self.__init_PEM(data, n_components=n_components, rand_init=rand_init)
         while (loop < 10 or improvement > tolerance) and loop < 500:
             prior_prob = self.__weighting(f, tau, function=ln_exp_pdf)
             f, tau, s = self.__update_f_m_s(data, prior_prob, f, tau, s)
@@ -91,14 +92,14 @@ class EM:
         labels, data_cluster = self.predict(data, ln_exp_pdf, paras=[f.ravel(), tau.ravel()])
         return f, tau, s, labels, data_cluster
 
-    def GP_EM(self, n_components, tolerance=1e-1):
+    def GPEM(self, n_components, tolerance=1e-2, rand_init=False):
         data = self.data ## (n_samples, 2)
         x = data[:, 0] ## Gaussian R.V.
         y = data[:, 1] ## Poisson R.V.
         self.tolerance = tolerance
         ##  initialize EM parameters
-        f1, m, s1, loop, improvement = self.__init_GMM(data[:,0], n_components=n_components)
-        f2, tau, s2, loop, improvement = self.__init_PEM(data[:,1], n_components=n_components)
+        f1, m, s1, loop, improvement = self.__init_GMM(data[:,0], n_components=n_components, rand_init=rand_init)
+        f2, tau, s2, loop, improvement = self.__init_PEM(data[:,1], n_components=n_components, rand_init=rand_init)
         while (loop < 10 or improvement > tolerance) and loop < 500:
             prior_prob = self.__weighting(f1, m, s1, f2, tau, function=ln_gau_exp_pdf)
             f1, m, s1 = self.__update_f_m_s(data[:,0].reshape(-1,1), prior_prob, f1, m, s1)
@@ -121,6 +122,7 @@ class EM:
 
 
     def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False):
+        self.mode = mode
         ##  find best n_conponents
         data = self.data
         BICs = []
@@ -128,15 +130,17 @@ class EM:
         BIC_owns = []
         AIC_owns = []
         LLE = []
-        n_clusters = np.arange(1, 6)
+        n_clusters = np.arange(1, 8)
         for c in n_clusters:
             if mode == 'GMM':
                 f, tau, s, labels, data_cluster = self.GMM(n_components=c, tolerance=tolerance)
                 gmm = GaussianMixture(n_components=c, tol=tolerance).fit(data)
                 BICs += [gmm.bic(data)]
                 AICs += [gmm.aic(data)]
-            else:
+            elif mode == 'PEM':
                 f, tau, s, labels, data_cluster = self.PEM(n_components=c, tolerance=tolerance)
+            else:
+                f1, m, s1, f2, tau = self.GPEM(n_components=c, tolerance=tolerance)
 
             BIC_owns += [self.__BIC()]
             AIC_owns += [self.__AIC()]
@@ -186,6 +190,7 @@ class EM:
         """
 
         n_components = self.n_components
+        # paras = np.array(paras).reshape()
         paras = np.array(paras)[:, -n_components:] ## size to (n_paras, n_components)
         p = np.exp(function(data, args=paras)) ##(n_components, n_samples)
         prior_prob = p / sum(p)
@@ -226,7 +231,7 @@ class EM:
             ax.plot(x, y_fit[i, :], '-')
         ax.plot(x, sum(y_fit), 'r--')
         ax.set_xlabel('dwell time (s)', fontsize=15)
-        ax.set_ylabel('probability density (1/$\mathregular{s^2}$)', fontsize=15)
+        ax.set_ylabel('survival', fontsize=15)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         if save == True:
@@ -234,7 +239,7 @@ class EM:
         return fig
 
     ##  plot data histogram and its gaussian EM (GMM) results
-    def plot_fit_gauss(self, save=False, path='output.png', scatter=False):
+    def plot_fit_gauss(self, xlim=None, ylim=None, save=False, path='output.png', scatter=False):
         data = self.data
         data_cluster = self.data_cluster
         f = self.f[-1,:]
@@ -262,7 +267,8 @@ class EM:
             ax.set_ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
             for i,x in enumerate(data_cluster):
                 ax.plot(x, np.zeros(len(x)), 'o', markersize=4, color=self.__colors_order()[i])
-
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         if save == True:
             save_img(fig, path)
         return fig
@@ -286,38 +292,74 @@ class EM:
 
 
     def __AIC(self):
+        mode = self.mode
         ln_likelihood = self.ln_likelihood
         n_components = self.n_components
-        AIC = -2 * ln_likelihood + (n_components * 3 - 1) * 2
+        if mode == 'GMM':
+            AIC = -2 * ln_likelihood + (n_components * 3 - 1) * 2
+        elif mode == 'PEM':
+            AIC = -2 * ln_likelihood + (n_components * 2 - 1) * 2
+        else: ## GP-EM
+            AIC = -2 * ln_likelihood + (n_components * 4 - 1) * 2
+
         return AIC
 
     def __BIC(self):
+        mode = self.mode
         n_samples = len(self.data)
         ln_likelihood = self.ln_likelihood
         n_components = self.n_components
-        BIC = -2 * ln_likelihood + (n_components * 3 - 1) * np.log(n_samples)
+        if mode == 'GMM':
+            BIC = -2 * ln_likelihood + (n_components * 3 - 1) * np.log(n_samples)
+        elif mode == 'PEM':
+            BIC = -2 * ln_likelihood + (n_components * 2 - 1) * np.log(n_samples)
+        else:
+            BIC = -2 * ln_likelihood + (n_components * 4 - 1) * np.log(n_samples)
+
         return BIC
 
     ##  initialize mean, std and fraction for GMM
-    def __init_GMM(self, data, n_components):
+    def __init_GMM(self, data, n_components, rand_init=False):
+
         self.n_components = n_components
         data = data.reshape(-1, 1)
-        # data = self.data.reshape((-1, 1))
-        f, m, s = self.__get_f_m_s_kmeans(data)
+        if rand_init==False:
+            f, m, s = self.__get_f_m_s_kmeans(data)
+        else:
+            f = np.zeros(n_components)
+            m = np.zeros(n_components)
+            s = np.zeros(n_components)
+            for i in range(n_components):
+                f[i] = random.random()
+                m[i] = random.random()*max(data)
+                s[i] = random.random()*np.std(data)
+            m, f, s = self.__sort_according(m, f, s) ## sort according to first array
+
         loop = 0
         improvement = 10
         return f, m, s, loop, improvement
 
     ##  initialize parameters for Poisson EM
-    def __init_PEM(self, data, n_components):
+    def __init_PEM(self, data, n_components, rand_init=False):
         # data = self.data
         data = data.reshape(-1, 1)
         self.n_components = n_components
         mean = np.mean(data)
         std = np.std(data)
-        f = np.ones(n_components) / n_components
-        tau = np.linspace(abs(mean - 0.5 * std), mean + 0.5 * std, n_components)
-        s = tau.copy()
+        if rand_init==False:
+            f = np.ones(n_components) / n_components
+            tau = np.linspace(abs(mean - 0.5 * std), mean + 0.5 * std, n_components)
+            s = tau.copy()
+        else:
+            f = np.zeros(n_components)
+            tau = np.zeros(n_components)
+            s = np.zeros(n_components)
+            for i in range(n_components):
+                f[i] = random.random()
+                tau[i] = random.random()*max(data)
+                s[i] = random.random()*np.std(data)
+            tau, f, s = self.__sort_according(tau, f, s) ## sort according to first array
+
         loop = 0
         improvement = 10
         return f, tau, s, loop, improvement
@@ -432,6 +474,14 @@ class EM:
             results += [np.reshape(arg, (n_rows, n_cols))]
         return results
 
+    def __sort_according(self, *args):
+        index = np.argsort(args[0])
+        results = []
+        for arg in args:
+            arg = np.array(arg)
+            results += [arg[index]]
+        return results
+
     def __plot_EM_result(self, result, ax, xlabel='iteration', ylabel='value'):
         n_feature = result.shape[1]
         iteration = result.shape[0]
@@ -512,8 +562,8 @@ def gau_exp_pdf(data, args):
     tau = np.array(args[4])
     y = []
     for f1, xm, s1, tau in zip(f1, xm, s1, tau):
-        if f1 <= 0.4 or f1 >= 0.6:
-            f1 = 0.4
+        if f1 <= 0.1 or f1 >= 0.9:
+            f1 = 0.1
         if s1 <= 1:
             s1 = 1
         if tau <= 0.01:
@@ -533,8 +583,8 @@ def ln_gau_exp_pdf(data, args):
     tau = np.array(args[4])
     lny = []
     for f1, xm, s1, tau in zip(f1, xm, s1, tau):
-        if f1 <= 0.4 or f1 >= 0.6:
-            f1 = 0.4
+        if f1 <= 0.1 or f1 >= 0.9:
+            f1 = 0.1
         if s1 <= 1:
             s1 = 1
         if tau <= 0.01:

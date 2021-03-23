@@ -9,7 +9,7 @@ if __name__ == '__main__':
     data = np.array([data_g, data_p]).T
     # plt.plot(data_g, data_p, 'o')
     EM_gp = EM(data, dim=2)
-    f1, m, s1, f2, tau = EM_gp.GP_EM(2, tolerance=1e-10)
+    f1, m, s1, f2, tau = EM_gp.GPEM(2, tolerance=1e-10)
     para = [f1[-1].ravel(), m[-1].ravel(), s1[-1].ravel(), f2[-1].ravel(), tau[-1].ravel()]
     labels, data_cluster = EM_gp.predict(data, function=ln_gau_exp_pdf, paras=para)
 
