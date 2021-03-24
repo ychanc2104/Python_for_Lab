@@ -2,7 +2,7 @@
 from matplotlib import rcParams
 rcParams["font.family"] = "sans-serif"
 rcParams["font.sans-serif"] = ["Arial"]
-# rcParams.update({'font.size': 18})
+rcParams.update({'font.size': 18})
 from basic.binning import binning
 import numpy as np
 import matplotlib.pyplot as plt
@@ -215,6 +215,43 @@ class EM:
             save_img(fig, path)
         return fig
 
+    ##  plot Gaussian-Poisson contour plot
+    def plot_gp_contour(self, save=False, path='output.png'):
+        data = self.data
+        f1 = self.f1[-1,:].ravel()
+        m = self.m[-1,:].ravel()
+        s1 = self.s1[-1,:].ravel()
+        f2 = self.f2[-1,:].ravel()
+        tau = self.tau[-1,:].ravel()
+        n_components = self.n_components
+        paras = [f1, m, s1, f2, tau]
+        labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=paras)
+
+        x = np.linspace(min(data[:,0]), max(data[:,0]), 100)
+        t = np.linspace(min(data[:,1]), max(data[:,1]), 100)
+        x_mesh, t_mesh = np.meshgrid(x, t)
+        x_t = np.array([x_mesh.ravel(), t_mesh.ravel()]).T
+        data_fitted = ln_gau_exp_pdf(x_t, args=paras)
+
+        fig, ax = plt.subplots()
+        # cmaps = ['Greys', 'Purples', 'Blues', 'Greens', 'Oranges']
+        cmaps = ['Reds', 'cool', 'winter', 'Wistia', 'copper']
+
+        for i,fit in enumerate(data_fitted):
+            c1 = self.__colors_order()[i+2]
+            ax.plot(data_cluster[i][:, 0], data_cluster[i][:, 1], 'o', color=c1, markersize=2)
+        for i,fit in enumerate(data_fitted):
+            c = self.__colors_order()[i]
+            ax.contour(x_mesh, t_mesh, np.exp(fit).reshape(len(x), len(t)), levels=5, cmap=cmaps[i])
+
+        ax.set_xlabel('step size', fontsize=22)
+        ax.set_ylabel('dwell time', fontsize=22)
+        plt.tight_layout()
+        plt.show()
+
+
+
+
     ##  plot the survival function
     def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png'):
         data = self.data
@@ -230,8 +267,8 @@ class EM:
         for i in range(n_components):
             ax.plot(x, y_fit[i, :], '-')
         ax.plot(x, sum(y_fit), 'r--')
-        ax.set_xlabel('dwell time (s)', fontsize=15)
-        ax.set_ylabel('survival', fontsize=15)
+        ax.set_xlabel('dwell time (s)', fontsize=22)
+        ax.set_ylabel('survival', fontsize=22)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         if save == True:
@@ -256,15 +293,15 @@ class EM:
             for i in range(n_components):
                 ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
             ax.plot(x, sum(y_fit), 'r-')
-            ax.set_xlabel('step size (nm)', fontsize=15)
-            ax.set_ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
+            ax.set_xlabel('step size (nm)', fontsize=22)
+            ax.set_ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=22)
         else:
             fig, ax = plt.subplots()
             for i in range(n_components):
                 ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
             ax.plot(x, sum(y_fit), 'r--')
-            ax.set_xlabel('step size (nm)', fontsize=15)
-            ax.set_ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=15)
+            ax.set_xlabel('step size (nm)', fontsize=22)
+            ax.set_ylabel('probability density (1/$\mathregular{nm^2}$)', fontsize=22)
             for i,x in enumerate(data_cluster):
                 ax.plot(x, np.zeros(len(x)), 'o', markersize=4, color=self.__colors_order()[i])
         ax.set_xlim(xlim)
@@ -562,8 +599,8 @@ def gau_exp_pdf(data, args):
     tau = np.array(args[4])
     y = []
     for f1, xm, s1, tau in zip(f1, xm, s1, tau):
-        if f1 <= 0.1 or f1 >= 0.9:
-            f1 = 0.1
+        if f1 <= 0.4 or f1 >= 0.6:
+            f1 = 0.5
         if s1 <= 1:
             s1 = 1
         if tau <= 0.01:
@@ -583,8 +620,8 @@ def ln_gau_exp_pdf(data, args):
     tau = np.array(args[4])
     lny = []
     for f1, xm, s1, tau in zip(f1, xm, s1, tau):
-        if f1 <= 0.1 or f1 >= 0.9:
-            f1 = 0.1
+        if f1 <= 0.4 or f1 >= 0.6:
+            f1 = 0.5
         if s1 <= 1:
             s1 = 1
         if tau <= 0.01:
