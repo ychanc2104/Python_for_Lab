@@ -6,7 +6,7 @@ from EM_Algorithm.EM import EM
 if __name__ == "__main__":
     ##  produce data
 
-    data = gen_poisson(tau=[0.5, 4, 10], n_sample=[400]*3)
+    data = gen_poisson(tau=[0.5, 2, 10], n_sample=[400]*3)
     n_sample = len(data)
     tolerance = 1e-3
     ##  fit Poisson EM

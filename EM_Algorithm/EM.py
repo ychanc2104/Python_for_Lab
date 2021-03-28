@@ -57,12 +57,14 @@ class EM:
         self.tolerance = tolerance
         ##  initialize EM parameters
         f, m, s, loop, improvement = self.__init_GMM(data, n_components=n_components, rand_init=rand_init)
+        f1 = np.ones(len(m))
         while (loop < 10 or improvement > tolerance) and loop < 500:
-            prior_prob = self.__weighting(f, m, s, function=ln_oneD_gaussian)
+            prior_prob = self.__weighting(f1, m, s, function=ln_oneD_gaussian)
             f, m, s = self.__update_f_m_s(data, prior_prob, f, m, s)
             improvement = self.__cal_improvement(f, m, s)
             loop += 1
-        self.__weighting(f, m, s, function=ln_oneD_gaussian) # update prior prob
+            f1 = np.ones(len(m))
+        self.__weighting(f1, m, s, function=ln_oneD_gaussian) # update prior prob
         f, m, s = self.__reshape_all(f, m, s, n_rows=loop+1, n_cols=n_components)
         self.f = f
         self.m = m
@@ -77,12 +79,14 @@ class EM:
         self.tolerance = tolerance
 
         f, tau, s, loop, improvement = self.__init_PEM(data, n_components=n_components, rand_init=rand_init)
+        f1 = np.ones(len(tau))
         while (loop < 10 or improvement > tolerance) and loop < 500:
-            prior_prob = self.__weighting(f, tau, function=ln_exp_pdf)
+            prior_prob = self.__weighting(f1, tau, function=ln_exp_pdf)
             f, tau, s = self.__update_f_m_s(data, prior_prob, f, tau, s)
             improvement = self.__cal_improvement(f, tau)
             loop += 1
-        self.__weighting(f, tau, function=ln_exp_pdf)
+            f1 = np.ones(len(tau))
+        self.__weighting(f1, tau, function=ln_exp_pdf)
         f, tau, s = self.__reshape_all(f, tau, s, n_rows=loop+1, n_cols=n_components)
         self.f = f
         self.m = tau
@@ -100,13 +104,17 @@ class EM:
         ##  initialize EM parameters
         f1, m, s1, loop, improvement = self.__init_GMM(data[:,0], n_components=n_components, rand_init=rand_init)
         f2, tau, s2, loop, improvement = self.__init_PEM(data[:,1], n_components=n_components, rand_init=rand_init)
+        f11 = np.ones(len(m))
+        f22 = np.ones(len(tau))
         while (loop < 10 or improvement > tolerance) and loop < 500:
-            prior_prob = self.__weighting(f1, m, s1, f2, tau, function=ln_gau_exp_pdf)
+            prior_prob = self.__weighting(f11, m, s1, f22, tau, function=ln_gau_exp_pdf)
             f1, m, s1 = self.__update_f_m_s(data[:,0].reshape(-1,1), prior_prob, f1, m, s1)
             f2, tau, s2 = self.__update_f_m_s(data[:,1].reshape(-1,1), prior_prob, f2, tau, s2)
             improvement = self.__cal_improvement(m, s1, tau)
             loop += 1
-        self.__weighting(f1, m, s1, f2, tau, function=ln_gau_exp_pdf)
+            f11 = np.ones(len(m))
+            f22 = np.ones(len(tau))
+        self.__weighting(f11, m, s1, f22, tau, function=ln_gau_exp_pdf)
         f1, m, s1, f2, tau = self.__reshape_all(f1, m, s1, f2, tau, n_rows=loop+1, n_cols=n_components)
         self.f1 = f1
         self.m = m
@@ -147,12 +155,12 @@ class EM:
             LLE += [self.ln_likelihood]
         if figure == True:
             plt.figure()
-            plt.plot(n_clusters, BIC_owns, 'o')
+            plt.plot(n_clusters, BIC_owns, '--o')
             plt.title('BIC')
             plt.xlabel('n_components')
             plt.ylabel('BIC_owns')
             plt.figure()
-            plt.plot(n_clusters, AIC_owns, 'o')
+            plt.plot(n_clusters, AIC_owns, '--o')
             plt.title('AIC')
             plt.xlabel('n_components')
             plt.ylabel('AIC_owns')
@@ -319,6 +327,7 @@ class EM:
         fig, ax = plt.subplots()
         kmf.plot_survival_function()
         ax.get_legend().remove() ## remove legend
+        self.kmf = kmf
         return fig, ax
 
     ##  calculate log-likelihood of given parameters, function is log-function
@@ -599,10 +608,9 @@ def gau_exp_pdf(data, args):
     tau = np.array(args[4])
     y = []
     for f1, xm, s1, tau in zip(f1, xm, s1, tau):
-        if f1 <= 0.4 or f1 >= 0.6:
-            f1 = 0.5
-        if s1 <= 1:
-            s1 = 1
+
+        if s1 <= 0.5:
+            s1 = 0.5
         if tau <= 0.01:
             tau = 0.01
         y += [f1*1/s1/np.sqrt(2 * math.pi)*np.exp(-(x - xm)**2/2/s1**2)*f1*1/tau*np.exp(-t/tau)]
@@ -620,10 +628,9 @@ def ln_gau_exp_pdf(data, args):
     tau = np.array(args[4])
     lny = []
     for f1, xm, s1, tau in zip(f1, xm, s1, tau):
-        if f1 <= 0.4 or f1 >= 0.6:
-            f1 = 0.5
-        if s1 <= 1:
-            s1 = 1
+
+        if s1 <= 0.5:
+            s1 = 0.5
         if tau <= 0.01:
             tau = 0.01
         lny += [np.log(f1)-np.log(s1)-1/2*np.log(2*math.pi)-(x-xm)**2/2/s1**2 + np.log(f1/tau) - t/tau]

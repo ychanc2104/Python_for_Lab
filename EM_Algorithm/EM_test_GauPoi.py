@@ -4,8 +4,8 @@ from EM_Algorithm.EM import *
 
 if __name__ == '__main__':
     n_sample = 500
-    data_g = gen_gauss(mean=[4, 6], std=[2,2], n_sample=[n_sample]*2)
-    data_p = gen_poisson(tau=[1, 3], n_sample=[n_sample]*2)
+    data_g = gen_gauss(mean=[4, 7], std=[2,2], n_sample=[n_sample]*2)
+    data_p = gen_poisson(tau=[1, 2], n_sample=[n_sample]*2)
     data = np.array([data_g, data_p]).T
     # plt.plot(data_g, data_p, 'o')
     EM_gp = EM(data, dim=2)
@@ -18,4 +18,6 @@ if __name__ == '__main__':
     # for x in data_cluster:
     #     plt.plot(x[:,0], x[:,1],'o')
     # plt.plot(data_g, data_p, 'o', markersize=2)
+    plt.xlabel('step (count)')
+    plt.ylabel('dwell time (s)')
 
