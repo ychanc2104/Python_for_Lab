@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     all_results = []
-    for i in range(3):
+    for i in range(1):
         conc = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0] ## S5S1
         # conc = [1.0, 1.2, 1.5, 1.8, 2.0, 3.0, 4.0] ## m51 only
         # conc = [0.1, 0.2, 0.25, 0.5, 0.7, 0.8, 1.1, 1.2, 2.0]  ## EcRecA
-        # conc = [0.0]
+        conc = [3.0]
     
     
         path_folder = select_folder()
@@ -49,7 +49,7 @@ if __name__ == '__main__':
             ## get Gaussian EM results
             EM_g = EM(step)
             n_components_g = EM_g.opt_components(tolerance=1e-2, mode='GMM', criteria='BIC', figure=False)
-            f, m, s, labels, data_cluster = EM_g.GMM(n_components_g)
+            f, m, s = EM_g.GMM(n_components_g, rand_init=True, tolerance=1e-2)
             EM_g.plot_fit_gauss(scatter=True, xlim=[0,18], save=True, path=f'{c}_gauss.png')
     
             steps += [step]
@@ -63,7 +63,7 @@ if __name__ == '__main__':
             ## get poisson EM results
             EM_p = EM(dwell)
             n_components_p = EM_p.opt_components(tolerance=1e-2, mode='PEM', criteria='BIC', figure=False)
-            f_tau, tau, s_tau, labels, data_cluster = EM_p.PEM(n_components_p)
+            f_tau, tau, s_tau = EM_p.PEM(n_components_p)
             EM_p.plot_fit_exp(xlim=[0,10], save=True, path=f'{c}_survival.png')
             all_ftau += [f_tau[-1, :]]
             all_tau += [tau[-1, :]]
@@ -74,8 +74,8 @@ if __name__ == '__main__':
             # plt.plot(data_g, data_p, 'o')
             EM_gp = EM(step_dwell, dim=2)
             # n_components_gp = EM_gp.opt_components(tolerance=1e-3, mode='GP', criteria='BIC', figure=False)
-    
-            f1, m1, s1, f2, tau1 = EM_gp.GPEM(n_components=max(n_components_g,n_components_p), tolerance=1e-2, rand_init=True)
+            opt_components = EM_gp.opt_components(tolerance=1e-2, mode='GPEM', criteria='BIC')
+            f1, m1, s1, tau1 = EM_gp.GPEM(n_components=opt_components, tolerance=1e-2, rand_init=True)
             # para = [f1[-1].ravel(), m1[-1].ravel(), s1[-1].ravel(), f2[-1].ravel(), tau1[-1].ravel()]
             # labels, data_cluster = EM_gp.predict(step_dwell, function=ln_gau_exp_pdf, paras=para)
             EM_gp.plot_gp_contour(save=True, path=f'{c}_2D.png')
