@@ -10,7 +10,7 @@ def binning(data, bin_number, xlabel='value', ylabel='probability density'):
     binsize = center[1] - center[0]
     pd = count/sum(count)/binsize
     fig, ax = plt.subplots(figsize=(10,8))
-    ax.bar(center, pd, width=binsize, color="grey", edgecolor="white")
+    ax.bar(center, pd, width=binsize, color="silver", edgecolor="white")
     ax.set_xlabel(f'{xlabel}', fontsize=15)
     ax.set_ylabel(f'{ylabel}', fontsize=15)
     return pd, center, fig, ax
