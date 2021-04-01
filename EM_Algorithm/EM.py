@@ -60,36 +60,46 @@ class EM:
         self.tolerance = tolerance
         ##  initialize EM parameters
         f, m, s, loop, improvement = self.__init_GMM(data, n_components=n_components, rand_init=rand_init)
-        while (loop < 20 or improvement > tolerance) and loop < 500:
+        converged = improvement < tolerance
+        while (loop < 20 or ~converged) and loop < 500:
             prior_prob = self.__weighting(f, m, s, function=ln_oneD_gaussian)
             f, m, s = self.__update_f_m_s(data, prior_prob, f, m, s)
             improvement = self.__cal_improvement(f, m, s)
+            converged = improvement < tolerance
             loop += 1
         f, m, s = self.__reshape_all(f, m, s, n_rows=loop+1, n_cols=n_components)
         self.para_progress = [f, m, s]
-        self.para_final = [f[-1], m[-1], s[-1]]
+        m_f, f_f, s_f = self.__sort_according(m[-1], f[-1], s[-1])
+        self.para_final = [f_f, m_f, s_f]
         para = self.para_final
         self.__cal_LLE(data, function=ln_oneD_gaussian, para=para)
+        converged = np.array([converged] * n_components)
+        self.converged = converged
         # labels, data_cluster = self.predict(data, ln_oneD_gaussian, paras=[f.ravel(), m.ravel(), s.ravel()])
-        return f, m, s
+        return f_f, m_f, s_f, converged
 
     def PEM(self, n_components, tolerance=1e-2, rand_init=False):
         self.n_components = n_components
         data = self.data
         self.tolerance = tolerance
         f, tau, s, loop, improvement = self.__init_PEM(data, n_components=n_components, rand_init=rand_init)
-        while (loop < 20 or improvement > tolerance) and loop < 500:
+        converged = improvement < tolerance
+        while (loop < 20 or ~converged) and loop < 500:
             prior_prob = self.__weighting(f, tau, function=ln_exp_pdf)
             f, tau, s = self.__update_f_m_s(data, prior_prob, f, tau, s)
             improvement = self.__cal_improvement(f, tau)
+            converged = improvement < tolerance
             loop += 1
         f, tau, s = self.__reshape_all(f, tau, s, n_rows=loop+1, n_cols=n_components)
         self.para_progress = [f, tau, s]
-        self.para_final = [f[-1], tau[-1]]
+        tau_f, f_f, s_f = self.__sort_according(tau[-1], f[-1], s[-1])
+        self.para_final = [f_f, tau_f]
         para = self.para_final
         self.__cal_LLE(data, function=ln_exp_pdf, para=para)
+        converged = np.array([converged] * n_components)
+        self.converged = converged
         # labels, data_cluster = self.predict(data, ln_exp_pdf, paras=[f.ravel(), tau.ravel()])
-        return f, tau, s
+        return f_f, tau_f, s_f, converged
 
     def GPEM(self, n_components, tolerance=1e-2, rand_init=False):
         data = self.data ## (n_samples, 2)
@@ -99,19 +109,24 @@ class EM:
         ##  initialize EM parameters
         f1, m, s1, loop, improvement = self.__init_GMM(data[:,0], n_components=n_components, rand_init=rand_init)
         f2, tau, s2, loop, improvement = self.__init_PEM(data[:,1], n_components=n_components, rand_init=rand_init)
-        while (loop < 20 or improvement > tolerance) and loop < 500:
+        converged = improvement < tolerance
+        while (loop < 20 or ~converged) and loop < 500:
             prior_prob = self.__weighting(f1, m, s1, tau, function=ln_gau_exp_pdf)
             f1, m, s1 = self.__update_f_m_s(data[:,0].reshape(-1,1), prior_prob, f1, m, s1)
             f2, tau, s2 = self.__update_f_m_s(data[:,1].reshape(-1,1), prior_prob, f2, tau, s2)
             improvement = self.__cal_improvement(f1, m, s1, tau)
+            converged = improvement < tolerance
             loop += 1
         f1, m, s1, tau = self.__reshape_all(f1, m, s1, tau, n_rows=loop+1, n_cols=n_components)
         self.para_progress = [f1, m, s1, tau]
-        self.para_final = [f1[-1], m[-1], s1[-1], tau[-1]]
+        m_f, f_f, s_f, tau_f = self.__sort_according(m[-1], f1[-1], s1[-1], tau[-1])
+        self.para_final = [f_f, m_f, s_f, tau_f]
         para = self.para_final
         self.__cal_LLE(data, function=ln_gau_exp_pdf, para=para)
+        converged = np.array([converged] * n_components)
+        self.converged = converged
         # labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=para)
-        return f1, m, s1, tau
+        return f_f, m_f, s_f, tau_f, converged
 
 
     def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False):
@@ -206,7 +221,7 @@ class EM:
         return fig
 
     ##  plot Gaussian-Poisson contour plot
-    def plot_gp_contour(self, save=False, path='output.png'):
+    def plot_gp_contour(self, xlim=None, ylim=None, save=False, path='output.png'):
         data = self.data
         paras = self.para_final
         labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=paras)
@@ -227,6 +242,8 @@ class EM:
             ax.contour(x_mesh, t_mesh, np.exp(fit).reshape(len(x), len(t)), levels=5, cmap=cmaps[i], linewidths=3)
         ax.set_xlabel('step size (count)', fontsize=22)
         ax.set_ylabel('dwell time (s)', fontsize=22)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         plt.tight_layout()
         plt.show()
         if save == True:
@@ -439,14 +456,15 @@ class EM:
 
         """
         # data = self.data
+        s_lower = self.s_lower
         n_sample = len(data)
         # n_components = self.n_components
         f_new = np.sum(prior_prob, axis=1) / n_sample
         m_new = np.matmul(prior_prob, data).ravel() / np.sum(prior_prob, axis=1)
         s_new = np.sqrt( np.matmul(prior_prob, data**2).ravel()/(np.sum(prior_prob, axis=1)) - m_new**2 )
-        if any(s_new <= 1e-1) or any(np.isnan(s_new)):
-            s_new[s_new <= 1e-1] = random.random()+0.3
-            s_new[np.isnan(s_new)] = random.random()+0.3
+        if any(s_new <= s_lower) or any(np.isnan(s_new)):
+            s_new[s_new <= s_lower] = random.random()+0.5
+            s_new[np.isnan(s_new)] = random.random()+0.5
 
         f, m, s = self.__append_arrays([f,f_new], [m,m_new], [s,s_new])
         self.f = f
