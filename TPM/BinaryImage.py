@@ -99,6 +99,7 @@ class BinaryImage:
         cX, cY = self.select_XY(cX, cY, self.criteria_dist)
         cX, cY = self.get_accurate_xy(image, cX, cY)
 
+
         self.bead_number = len(cX)
         image = self.drawAOI(image, cX, cY, self.aoi_size, put_text=put_text)
         self.show_grayimage(image, save=True)
@@ -251,7 +252,8 @@ class BinaryImage:
     ##  sort bead number using distance between y-axis(x = 0)
     def sortXY(self, cX, cY):
         n = len(cX)
-        index = np.argsort(cX)
+        R = np.sqrt(cX**2 + cY**2)
+        index = np.argsort(R)
         cX = cX[index]
         cY = cY[index]
         self.radius_save = np.reshape(self.radius_save[index], (n, 1))
@@ -298,14 +300,15 @@ class BinaryImage:
             dx = cX1 - cX1[i]
             dy = cY1 - cY1[i]
             dr = np.sqrt(dx ** 2 + dy ** 2)
-            i_self = (dr != -10)
-            index_cluster = dr[i_self] < criteria
-            cX2 = cX1[i_self]
-            cY2 = cY1[i_self]
-            if avg != np.mean(cX2[index_cluster]):
-                cX_selected += [np.mean(cX2[index_cluster])]
-                cY_selected += [np.mean(cY2[index_cluster])]
-                avg = np.mean(cX2[index_cluster])
+            index_cluster = dr < criteria
+            cX_cluster = np.mean(cX1[index_cluster])
+            cY_cluster = np.mean(cY1[index_cluster])
+            R = np.sqrt(cX_cluster**2 + cY_cluster**2)
+            # if (avg >= R+2) or (avg <= R-2): ## for add one center
+            if (avg != R ):
+                cX_selected += [cX_cluster]
+                cY_selected += [cY_cluster]
+                avg = R
                 index += [i]
         self.radius_save = self.radius_save[index]
         self.saved_contours = self.saved_contours[index]
@@ -330,7 +333,7 @@ class BinaryImage:
 
     ##  get avg intensity of all AOI(20 * 20 pixel)
     def getintensity(self, image, cX, cY, aoi_size=20):  # i: bead number: 1,2,3,...,N
-        half_size = int(aoi_size / 4)
+        half_size = int(2)
         intensity = []
         for i in range(len(cX)):
             horizontal = int(cY[i])  # width
