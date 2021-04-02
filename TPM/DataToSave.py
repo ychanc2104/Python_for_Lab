@@ -12,6 +12,7 @@ import pandas as pd
 class DataToSave:
     # data: np.array, path_folder: string path
     def __init__(self, data, localization_results, path_folder, avg_fps, window, factor_p2n):
+        self.avg_fps = avg_fps
         self.columns = self.get_df_sheet_names()
         self.localization_results = localization_results
         self.df = pd.DataFrame(data=data, columns=self.columns)
@@ -106,12 +107,13 @@ class DataToSave:
         radius = df_reshape_analyzed['avg_attrs']['bead_radius']
         ratio = np.nan_to_num(ratio)
         radius = np.array(radius).reshape((ratio.shape[0], 1))
-        c_ratio = ((ratio > 0.85) & (ratio < 1.15))
+        c_ratio = ((ratio > 0.80) & (ratio < 1.2))
         c_radius = (radius > 1) & (radius < 10)
         c = np.append(c_ratio, c_radius, axis=1)
         criteria = []
         for row_boolean in c:
-            criteria += [all(row_boolean)]
+            criteria += [any(row_boolean)]
+
         return np.array(criteria)
 
     ## get anaylyzed data, BM, sxsy,xy ratio...
@@ -149,15 +151,17 @@ class DataToSave:
         sx_2D = self.sx_2D
         sy_2D = self.sy_2D
         frame_acquired = self.frame_acquired
+        avg_fps = self.avg_fps
 
         BMx_sliding, BMx_fixing = self.calBM_2D(x_2D, factor_p2n=factor_p2n, window=window)
         BMy_sliding, BMy_fixing = self.calBM_2D(y_2D, factor_p2n=factor_p2n, window=window)
         sx_sy = sx_2D * sy_2D
         xy_ratio = self.get_xy_ratio([BMx_sliding, BMy_sliding], [BMx_fixing, BMy_fixing], [sx_2D ** 2, sy_2D ** 2])
+
         data_analyzed_med, data_analyzed_avg, data_analyzed_std = self.avg_std_operator(BMx_sliding, BMx_fixing,
                                                                                         BMy_sliding, BMy_fixing, sx_sy,
-                                                                                        xy_ratio[0], xy_ratio[1],
-                                                                                        xy_ratio[2])
+                                                                                        xy_ratio[0][:int(2*avg_fps)], xy_ratio[1][:int(2*avg_fps/20)],
+                                                                                        xy_ratio[2][:int(2*avg_fps)])
         data_reshaped_med, data_reshaped_avg, data_reshaped_std = self.df_reshape_avg_std_operator(self.df_reshape)
         # append data or time together
         data_reshaped_avg = np.append(data_reshaped_avg, self.localization_results, axis=1)
