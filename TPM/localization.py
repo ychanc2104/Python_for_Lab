@@ -13,25 +13,21 @@
 """
 ### import used modules first
 from TPM.BinaryImage import BinaryImage
+from basic.select import select_folder
 import time
-import tkinter as tk
-from tkinter import filedialog
+import matplotlib.pyplot as plt
 
 put_text = True
-criteria_dist = 10  # beabs are closer than 'criteria_dist' will remove
-aoi_size = 10
+criteria_dist = 20  # beabs are closer than 'criteria_dist' will remove
 frame_read_forcenter = 0  # no need to change, frame to autocenter beads
+contrast = 5
+
+blacklevel = 50
 N_loc = 40  # number of frame to stack and localization
-contrast = 3
+aoi_size = 20
 low = 40
 high = 120
-blacklevel = 30
 whitelevel = 70
-def select_folder():
-    root = tk.Tk()
-    root.withdraw()
-    path_folder = filedialog.askdirectory()
-    return path_folder
 
 def localization(path_folder, criteria_dist, aoi_size, frame_read_forcenter,
                  N_loc, contrast, low, high, blacklevel, whitelevel):

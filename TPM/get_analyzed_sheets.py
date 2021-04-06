@@ -4,8 +4,6 @@ from TPM.BinaryImage import BinaryImage
 from TPM.DataToSave import DataToSave
 from TPM.localization import select_folder
 import time
-import tkinter as tk
-from tkinter import filedialog
 import pandas as pd
 import numpy as np
 import os
@@ -14,11 +12,7 @@ from glob import glob
 analyzed_mode = '50'  ## if analyzed_mode = 'all', analyze all frames of .csv file
 frame_n = 50
 
-# def select_folder():
-#     root = tk.Tk()
-#     root.withdraw()
-#     path_folder = filedialog.askdirectory()
-#     return path_folder
+
 
 def get_analyzed_sheet(path_folder, analyzed_mode, frame_n):
     path_data = glob(os.path.join(path_folder, '*-fitresults.csv'))[0]
