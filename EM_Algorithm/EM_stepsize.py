@@ -14,6 +14,6 @@ if __name__ == '__main__':
     ##  fit GMM
     EM = EM(data)
     n_components = 2
-    f, m, s, labels, data_cluster = EM.GMM(n_components)
+    f, m, s, converged = EM.GMM(n_components)
     EM.plot_EM_results()
     EM.plot_fit_gauss()

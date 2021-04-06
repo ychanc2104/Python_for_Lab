@@ -11,7 +11,7 @@ if __name__ == '__main__':
     EMg = EM(data)
     opt_components = EMg.opt_components(tolerance=1e-2, mode='GMM', criteria='AIC', figure=False)
 
-    f, m, s = EMg.GMM(opt_components, tolerance=1e-2)
+    f, m, s, converged = EMg.GMM(opt_components, tolerance=1e-2)
     EMg.plot_EM_results()
     EMg.plot_fit_gauss(scatter='True')
 

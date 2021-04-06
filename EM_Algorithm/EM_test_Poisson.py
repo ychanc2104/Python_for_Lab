@@ -13,7 +13,7 @@ if __name__ == "__main__":
     EM_p = EM(data)
     # n_components = 2
     n_components_p = EM_p.opt_components(tolerance=tolerance, mode='PEM', criteria='AIC', figure=True)
-    f, tau, s = EM_p.PEM(n_components_p, tolerance)
+    f, tau, s, converged = EM_p.PEM(n_components_p, tolerance)
     EM_p.plot_EM_results()
     EM_p.plot_fit_exp(xlim=[0,40])
 
