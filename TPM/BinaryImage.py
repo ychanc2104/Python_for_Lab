@@ -32,17 +32,17 @@ def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
 
 ### define a class for all glimpse data
 class BinaryImage:
-    def __init__(self, path_folder, read_mode=1, frame_setread_num=10,
-                 criteria_dist=10, aoi_size=20, frame_read_forcenter=0,
+    def __init__(self, path_folder, read_mode=1, frame_setread_num=20,
+                 criteria_dist=20, aoi_size=20, frame_read_forcenter=0,
                  N_loc=40, contrast=10, low=40, high=120,
                  blacklevel=30, whitelevel=200):
         self.path_folder = os.path.abspath(path_folder)
         self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
         self.path_header_utf8 = self.path_header.encode('utf8')
         self.path_header_txt = os.path.abspath(os.path.join(path_folder, 'header.txt'))
-        self.path_data = self.get_path_data()
+        self.path_data = self.__get_path_data()
         [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
-        self.data_type, self.size_a_image, self.frame_per_file = self.getdatainfo()
+        self.data_type, self.size_a_image, self.frame_per_file = self.__getdatainfo()
         self.read_mode = read_mode
         self.frame_setread_num = frame_setread_num
         self.criteria_dist = criteria_dist
@@ -54,14 +54,14 @@ class BinaryImage:
         self.high = high
         self.blacklevel = blacklevel
         self.whitelevel = whitelevel
-        self.offset, self.fileNumber = self.getoffset()
+        self.offset, self.fileNumber = self.__getoffset()
         self.cut_image_width = 30
         # self.read1 = [] # one image at i
-        self.readN = self.readGlimpseN(frame_read_forcenter, N_loc)  # N image from i
+        self.readN = self.__readGlimpseN(frame_read_forcenter, N_loc)  # N image from i
         self.contours = []
         self.saved_contours = []
         self.edges = []
-        self.image = self.stackimageN(self.readN)  # image used to be localized
+        self.image = self.__stackimageN(self.readN)  # image used to be localized
         self.image_aoi = []
         self.cX = []
         self.cY = []
@@ -86,12 +86,12 @@ class BinaryImage:
     def Localize(self, put_text=True):
         print('start centering')
         image = self.image
-        image = self.enhance_contrast(image, self.contrast)
+        image = self.__enhance_contrast(image, self.contrast)
         contours = self.getContour(image, self.low, self.high)
         cX, cY = self.getXY(contours)
 
         ##  need to sort according to X first and select
-        cX, cY = self.sortXY(cX, cY)
+        cX, cY = self.__sortXY(cX, cY)
         cX, cY = self.select_XY(cX, cY, self.criteria_dist)
         cX, cY, amplitude = self.get_accurate_xy(image, cX, cY)
         cX, cY, amplitude = self.get_accurate_xy(image, cX, cY)
@@ -101,8 +101,8 @@ class BinaryImage:
         cX, cY, amplitude = self.removeblack(cX, cY, amplitude, self.blacklevel)
 
         self.bead_number = len(cX)
-        image = self.drawAOI(image, cX, cY, self.aoi_size, put_text=put_text)
-        self.show_grayimage(image, save=True)
+        image = self.__drawAOI(image, cX, cY, self.aoi_size, put_text=put_text)
+        self.__show_grayimage(image, save=True)
         self.cX = cX
         self.cY = cY
         print('finish centering')
@@ -117,14 +117,13 @@ class BinaryImage:
         read_mode = self.read_mode
         frame_setread_num = self.frame_setread_num
         frame_read_forcenter = self.frame_read_forcenter
-        initial_guess, initial_guess_beads, N = self.preparefit_info(read_mode, frame_setread_num, frames_acquired)
-        # self.initial_guess_beads = initial_guess_beads
+        initial_guess, initial_guess_beads, N = self.__preparefit_info(read_mode, frame_setread_num, frames_acquired)
         p0_1 = initial_guess_beads  # initialize fitting parameters for each bead
         tracking_results_list = []
         for i in range(N):
-            image = self.readGlimpse1(frame_read_forcenter+i)
+            image = self.__readGlimpse1(frame_read_forcenter+i)
             data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1)
-            p0_1 = self.update_p0(p0_1, p0_2, i)  # update fitting initial guess
+            p0_1 = self.__update_p0(p0_1, p0_2, i)  # update fitting initial guess
             tracking_results_list += data
             print(f'frame {i}')
         self.initial_guess_beads = p0_1
@@ -143,11 +142,11 @@ class BinaryImage:
         aoi_size = self.aoi_size
         path_folder = self.path_folder
         tracking_results_select = self.get_aoi_from_tracking_results(tracking_results, selected_aoi)
-        imageN = self.readGlimpseN(frame_i, N=N)
+        imageN = self.__readGlimpseN(frame_i, N=N)
         fourcc = cv2.VideoWriter_fourcc(*'H264')
         output_movie = cv2.VideoWriter(os.path.abspath(path_folder) + '/fitting2.mp4', fourcc, 5.0, (1200, 800))
         for image, tracking_result_select in zip(imageN, tracking_results_select):
-            image_aoi, intensity = self.getAOI(image, cY[selected_aoi], cX[selected_aoi], aoi_size)
+            image_aoi, intensity = self.__getAOI(image, cY[selected_aoi], cX[selected_aoi], aoi_size)
             para_fit = tracking_result_select[2:9]
             data_fitted = twoD_Gaussian((x, y), *para_fit)
             fig, ax = plt.subplots(1, 1)
@@ -182,13 +181,13 @@ class BinaryImage:
     def trackbead(self, image, cX, cY, aoi_size, frame, initial_guess_beads):
         bead_number = len(cX)
         data = []
-        bounds = self.get_bounds(aoi_size)
+        bounds = self.__get_bounds(aoi_size)
         x = self.x_fit
         y = self.y_fit
         # initial_guess_beads = self.initial_guess_beads
         initial_guess = self.initial_guess
         for j in range(bead_number):
-            image_tofit, intensity = self.getAOI(image, cY[j], cX[j], aoi_size)
+            image_tofit, intensity = self.__getAOI(image, cY[j], cX[j], aoi_size)
             # if intensity < 3500:
             #     contrast = 2
             #     image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
@@ -204,7 +203,7 @@ class BinaryImage:
             try:
                 popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), initial_guess_beads[j, :],
                                            bounds=bounds)
-                ss_res = self.get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
+                ss_res = self.__get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
                 # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
                 # data_fitted = twoD_Gaussian((x, y), *popt)
                 intensity_integral = 2 * math.pi * popt[0] * popt[1] * popt[2]
@@ -225,20 +224,7 @@ class BinaryImage:
         return data, popt_beads
 
     ### methods for localization
-    ##  stack multiple images
-    def stackimageN(self, imageN):
-        return np.mean((imageN.T), 2).T.astype('uint8')
 
-    ##  load image
-    def loadimage(self, image):
-        self.image = image
-
-    ##  enhance contrast
-    def enhance_contrast(self, image, contrast=10):
-        enh_con = ImageEnhance.Contrast(Image.fromarray(image))
-        image_contrasted = enh_con.enhance(contrast)
-        image = np.array(image_contrasted)
-        return image
 
     ##  get egde using frame in file,f
     def getContour(self, image, low=30, high=90):
@@ -251,17 +237,6 @@ class BinaryImage:
         self.edges = edges
         self.contours = contours
         return contours
-
-    ##  sort bead number using distance between y-axis(x = 0)
-    def sortXY(self, cX, cY):
-        n = len(cX)
-        R = np.sqrt(cX**2 + cY**2)
-        index = np.argsort(R)
-        cX = cX[index]
-        cY = cY[index]
-        self.radius_save = np.reshape(self.radius_save[index], (n, 1))
-        self.saved_contours = self.saved_contours[index]
-        return cX, cY
 
     ##  get center point using moment of edge
     def getXY(self, contours):
@@ -296,6 +271,7 @@ class BinaryImage:
         self.radius_save = radius_save
         return cX, cY
 
+    ##  core for selecting points which are not too close
     def select_XY(self, cX, cY, criteria):
         cX1 = np.array(cX)
         cY1 = np.array(cY)
@@ -315,7 +291,7 @@ class BinaryImage:
                 index += [i]
         self.radius_save = self.radius_save[index]
         self.saved_contours = self.saved_contours[index]
-        return np.array(cX_selected), np.array(cY_selected)
+        return cX_selected, cY_selected
 
     ## remove beads are too close, choose two image, refer to smaller bead#
     def removeXY(self, cX, cY, criteria):
@@ -336,7 +312,7 @@ class BinaryImage:
 
     ##  get avg intensity of all AOI(20 * 20 pixel)
     def getintensity(self, image, cX, cY, aoi_size=20):  # i: bead number: 1,2,3,...,N
-        half_size = int(aoi_size/4)
+        half_size = int(aoi_size/2)
         intensity = []
         for i in range(len(cX)):
             horizontal = int(cY[i])  # width
@@ -348,34 +324,52 @@ class BinaryImage:
 
     ##  remove low intensity aoi
     def removeblack(self, cX, cY, amplitude, blacklevel=50):
-        i_dele = np.empty(0).astype(int)
-        for i in range(len(cX)):
-            if amplitude[i] < blacklevel:
-                i_dele = np.append(i_dele, int(i))
-        cX = np.delete(cX, i_dele)
-        cY = np.delete(cY, i_dele)
-        self.radius_save = np.delete(self.radius_save, i_dele)
-        self.saved_contours = np.delete(self.saved_contours, i_dele)
-        intensity = np.delete(amplitude, i_dele)
-        return cX, cY, intensity
+        amplitude = np.array(amplitude)
+        index = amplitude >= blacklevel ## get amplitude >= blacklevel
+        cX = cX[index]
+        cY = cY[index]
+        amplitude = amplitude[index]
+        self.amplitude = amplitude
+        self.radius_save = self.radius_save[index]
+        self.saved_contours = self.saved_contours[index]
+        return cX, cY, amplitude
 
     ##  remove high intensity aoi
-    def removewhite(self, cX, cY, intensity, whitelevel=150):
-        i_dele = np.empty(0).astype(int)
-        # cX = [x for i, x in enumerate(cX) if intensity[i] < whitelevel]
-        for i in range(len(cX)):
-            if intensity[i] > whitelevel:
-                i_dele = np.append(i_dele, int(i))
-        cX = np.delete(cX, i_dele)
-        cY = np.delete(cY, i_dele)
-        self.radius_save = np.delete(self.radius_save, i_dele)
-        self.saved_contours = np.delete(self.saved_contours, i_dele)
-        intensity = np.delete(intensity, i_dele)
-        return cX, cY, intensity
+    def removewhite(self, cX, cY, amplitude, whitelevel=150):
+        amplitude = np.array(amplitude)
+        index = amplitude <= whitelevel ## get amplitude >= blacklevel
+        cX = cX[index]
+        cY = cY[index]
+        amplitude = amplitude[index]
+        self.amplitude = amplitude
+        self.radius_save = self.radius_save[index]
+        self.saved_contours = self.saved_contours[index]
+        return cX, cY, amplitude
 
+    ##  sort bead number using distance between y-axis(x = 0), distance from left-up corner
+    def __sortXY(self, cX, cY):
+        n = len(cX)
+        R = np.sqrt(cX**2 + cY**2)
+        index = np.argsort(R)
+        cX = cX[index]
+        cY = cY[index]
+        self.radius_save = np.reshape(self.radius_save[index], (n, 1))
+        self.saved_contours = self.saved_contours[index]
+        return cX, cY
+
+    ##  stack multiple images
+    def __stackimageN(self, imageN):
+        return np.mean((imageN.T), 2).T.astype('uint8')
+
+    ##  enhance contrast
+    def __enhance_contrast(self, image, contrast=10):
+        enh_con = ImageEnhance.Contrast(Image.fromarray(image))
+        image_contrasted = enh_con.enhance(contrast)
+        image = np.array(image_contrasted)
+        return image
 
     ##  plot X,Y AOI in given image
-    def drawAOI(self, image, cX, cY, aoi_size=20, put_text=True):
+    def __drawAOI(self, image, cX, cY, aoi_size=20, put_text=True):
         n = len(cX)
         for i in range(n):
             cv2.circle(image, (int(cX[i]), int(cY[i])), aoi_size, (255, 255, 255), 1)
@@ -385,14 +379,14 @@ class BinaryImage:
         return image
 
     ##  show and save gray image
-    def show_grayimage(self, image, save=True):
+    def __show_grayimage(self, image, save=True):
         plt.figure()
         plt.imshow(image, cmap='gray', vmin=0, vmax=255)
         if save == True:
-            cv2.imwrite(os.path.join(self.path_folder, self.gen_random_code(3)+'-output.png'), image)
+            cv2.imwrite(os.path.join(self.path_folder, self.__gen_random_code(3)+'-output.png'), image)
 
     ##  add 2n-word random texts(n-word number and n-word letter)
-    def gen_random_code(self, n):
+    def __gen_random_code(self, n):
         digits = "".join([random.choice(string.digits) for i in range(n)])
         chars = "".join([random.choice(string.ascii_letters) for i in range(n)])
         return digits + chars
@@ -425,7 +419,7 @@ class BinaryImage:
     ###############################################################################
     ### methods for tracking beads
     ## get image-cut of certain AOI
-    def getAOI(self, image, row, col, aoi_size=20):
+    def __getAOI(self, image, row, col, aoi_size=20):
         row = int(row)  # cY, height
         col = int(col)  # cX, width
         size_half = int(aoi_size / 2)
@@ -434,20 +428,19 @@ class BinaryImage:
         return image_cut, intensity
 
     ## get sum of squared residuals
-    def get_residuals(self, fn, x, y, image, popt):
+    def __get_residuals(self, fn, x, y, image, popt):
         residuals = image.ravel() - fn((x, y), *popt)
         ss_res = np.sum(residuals ** 2)
         return ss_res
 
     ## get bounds for curve_fit
-    def get_bounds(self, aoi_size=20):
-        # (amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset)
+    def __get_bounds(self, aoi_size=20):
+        ## (amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset)
         bounds = ((0, 0, 0, 0, 0, 0, 0), (255, aoi_size, aoi_size, aoi_size - 1, aoi_size - 1, 90, 255))
         return bounds
 
     ## get parameters for trackbead fitting
-    def preparefit_info(self, read_mode, frame_setread_num, frame_total):
-        bead_number = self.bead_number
+    def __preparefit_info(self, read_mode, frame_setread_num, frame_total):
         initial_guess = self.initial_guess
         initial_guess_beads = self.initial_guess_beads
         if read_mode == 0:
@@ -456,7 +449,7 @@ class BinaryImage:
             N = frame_total
         return initial_guess, initial_guess_beads, N
 
-    def update_p0(self, p0_i, p0_f, i):  # p0 is n by m matrix, n is bead number and m is 7, i=0,1,2,3,...
+    def __update_p0(self, p0_i, p0_f, i):  # p0 is n by m matrix, n is bead number and m is 7, i=0,1,2,3,...
         i += 1
         p0 = (p0_i * i + p0_f) / (i + 1)
         return p0
@@ -464,7 +457,7 @@ class BinaryImage:
     ###############################################################################
     ### methods for image reading
     ##  read one image at frame_i (0,1,2,...,N-1)
-    def readGlimpse1(self, frame_i=0):
+    def __readGlimpse1(self, frame_i=0):
         fileNumber = self.fileNumber[frame_i]
         offset = self.offset[frame_i]
         size_a_image = self.size_a_image
@@ -480,7 +473,7 @@ class BinaryImage:
         return read1
 
     ##  read N image from frame_i (0,1,2,...,N-1)
-    def readGlimpseN(self, frame_i=0, N=50):
+    def __readGlimpseN(self, frame_i=0, N=50):
         fileNumber = self.fileNumber[frame_i: frame_i + N]
         offset_toread = [self.offset[x] for x in set(fileNumber)]
         path_toread = [self.path_data[x] for x in set(fileNumber)]
@@ -539,7 +532,7 @@ class BinaryImage:
             return self.header
 
     ##  remove empty files and sort files by last modified time
-    def get_path_data(self):
+    def __get_path_data(self):
         all_path = [os.path.abspath(x) for x in sorted(glob(os.path.join(self.path_folder, '*.glimpse'))) if
          x != self.path_header]
         ##  remove data that size is 0 byte
@@ -549,7 +542,7 @@ class BinaryImage:
         return all_path
 
 
-    def getdatainfo(self):
+    def __getdatainfo(self):
         ### get file info.
         header = self.header
         path_data = self.path_data
@@ -566,7 +559,7 @@ class BinaryImage:
         return data_type, size_a_image, frame_per_file
 
     ##  get offset array
-    def getoffset(self):
+    def __getoffset(self):
         self.size_a_image = self.header[1] * self.header[2]
         frame_total = sum(self.frame_per_file)
         frame_file_max = self.frame_per_file[0]
@@ -584,6 +577,7 @@ class BinaryImage:
                 b += 1
         return offset, fileNumber
     ###############################################################################
+
 
     # ###  tracking bead position in a image, get center and std of X,Y using Gaussian fit
     # def trackbead(image):
