@@ -89,16 +89,16 @@ class BinaryImage:
         image = self.enhance_contrast(image, self.contrast)
         contours = self.getContour(image, self.low, self.high)
         cX, cY = self.getXY(contours)
-        # cX, cY = self.removeXY(cX, cY, self.criteria_dist)
-        intensity = self.getintensity(image, cX, cY, self.aoi_size)
-        cX, cY, intensity = self.removeblack(cX, cY, intensity, self.blacklevel)
-        # cX, cY, intensity = self.removewhite(cX, cY, intensity, self.whitelevel)
 
         ##  need to sort according to X first and select
         cX, cY = self.sortXY(cX, cY)
         cX, cY = self.select_XY(cX, cY, self.criteria_dist)
-        cX, cY = self.get_accurate_xy(image, cX, cY)
+        cX, cY, amplitude = self.get_accurate_xy(image, cX, cY)
+        cX, cY, amplitude = self.get_accurate_xy(image, cX, cY)
 
+        # cX, cY = self.select_XY(cX, cY, self.criteria_dist)
+        # intensity = self.getintensity(image, cX, cY, self.aoi_size)
+        cX, cY, amplitude = self.removeblack(cX, cY, amplitude, self.blacklevel)
 
         self.bead_number = len(cX)
         image = self.drawAOI(image, cX, cY, self.aoi_size, put_text=put_text)
@@ -116,12 +116,13 @@ class BinaryImage:
         aoi_size = self.aoi_size
         read_mode = self.read_mode
         frame_setread_num = self.frame_setread_num
+        frame_read_forcenter = self.frame_read_forcenter
         initial_guess, initial_guess_beads, N = self.preparefit_info(read_mode, frame_setread_num, frames_acquired)
         # self.initial_guess_beads = initial_guess_beads
         p0_1 = initial_guess_beads  # initialize fitting parameters for each bead
         tracking_results_list = []
         for i in range(N):
-            image = self.readGlimpse1(i)
+            image = self.readGlimpse1(frame_read_forcenter+i)
             data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1)
             p0_1 = self.update_p0(p0_1, p0_2, i)  # update fitting initial guess
             tracking_results_list += data
@@ -166,14 +167,16 @@ class BinaryImage:
         aoi_size = self.aoi_size
         initial_guess_beads = np.array([self.initial_guess] * len(cX))
         data, popt_beads = self.trackbead(image, cX, cY, aoi_size, frame=0, initial_guess_beads=initial_guess_beads)
+        amplitude = popt_beads[:, 0]
         x = popt_beads[:, 3]
         y = popt_beads[:, 4]
         self.dx_localization = x - aoi_size/2
         self.dy_localization = y - aoi_size/2
         self.initial_guess_beads = popt_beads
+        self.amplitude = amplitude
         cX = cX + self.dx_localization
         cY = cY + self.dy_localization
-        return cX, cY
+        return cX, cY, amplitude
 
     ##  tracking position of all beads in a image, get all parameters and frame number
     def trackbead(self, image, cX, cY, aoi_size, frame, initial_guess_beads):
@@ -264,6 +267,7 @@ class BinaryImage:
     def getXY(self, contours):
         cut = self.cut_image_width
         radius = []
+        radius_save = []
         n_contours = len(contours)
         cX = []
         cY = []
@@ -281,34 +285,33 @@ class BinaryImage:
             M = cv2.moments(c)
             # if (M['m00'] != 0) & (radius[-1] > 1):
             if (M['m00'] != 0):
-                self.radius_save += [radius[-1]]
+                radius_save += [radius[-1]]
                 saved_contours += [c]
                 cX += [(M['m10'] / M['m00']) + cut]
                 cY += [(M['m01'] / M['m00']) + cut]
-        self.saved_contours = saved_contours
+        self.saved_contours = np.array(saved_contours)
+        cX = np.array(cX)
+        cY = np.array(cY)
+        radius_save = np.array(radius_save)
+        self.radius_save = radius_save
         return cX, cY
 
     def select_XY(self, cX, cY, criteria):
         cX1 = np.array(cX)
         cY1 = np.array(cY)
         n = len(cX1)
-        cX_selected = []
-        cY_selected = []
-        avg = 0
+        cX_selected = np.empty(0)
+        cY_selected = np.empty(0)
         index = []
         for i in range(n):
-            dx = cX1 - cX1[i]
-            dy = cY1 - cY1[i]
-            dr = np.sqrt(dx ** 2 + dy ** 2)
-            index_cluster = dr < criteria
-            cX_cluster = np.mean(cX1[index_cluster])
-            cY_cluster = np.mean(cY1[index_cluster])
-            R = np.sqrt(cX_cluster**2 + cY_cluster**2)
-            # if (avg >= R+2) or (avg <= R-2): ## for add one center
-            if (avg != R ):
-                cX_selected += [cX_cluster]
-                cY_selected += [cY_cluster]
-                avg = R
+            x2 = cX1[i]
+            y2 = cY1[i]
+            c1 = abs(x2-cX_selected) >= criteria
+            c2 = abs(y2-cY_selected) >= criteria
+            c = np.array([c1 or c2 for c1,c2 in zip(c1,c2)]) ## get boolean array for outside of criteria distance
+            if all(c) or (i==0): ## collecting centers, every point should qualify
+                cX_selected = np.append(cX_selected, x2)
+                cY_selected = np.append(cY_selected, y2)
                 index += [i]
         self.radius_save = self.radius_save[index]
         self.saved_contours = self.saved_contours[index]
@@ -333,7 +336,7 @@ class BinaryImage:
 
     ##  get avg intensity of all AOI(20 * 20 pixel)
     def getintensity(self, image, cX, cY, aoi_size=20):  # i: bead number: 1,2,3,...,N
-        half_size = int(2)
+        half_size = int(aoi_size/4)
         intensity = []
         for i in range(len(cX)):
             horizontal = int(cY[i])  # width
@@ -344,16 +347,16 @@ class BinaryImage:
         return intensity
 
     ##  remove low intensity aoi
-    def removeblack(self, cX, cY, intensity, blacklevel=150):
+    def removeblack(self, cX, cY, amplitude, blacklevel=50):
         i_dele = np.empty(0).astype(int)
         for i in range(len(cX)):
-            if intensity[i] < blacklevel:
+            if amplitude[i] < blacklevel:
                 i_dele = np.append(i_dele, int(i))
         cX = np.delete(cX, i_dele)
         cY = np.delete(cY, i_dele)
         self.radius_save = np.delete(self.radius_save, i_dele)
         self.saved_contours = np.delete(self.saved_contours, i_dele)
-        intensity = np.delete(intensity, i_dele)
+        intensity = np.delete(amplitude, i_dele)
         return cX, cY, intensity
 
     ##  remove high intensity aoi
