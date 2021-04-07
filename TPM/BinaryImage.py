@@ -36,6 +36,7 @@ class BinaryImage:
                  criteria_dist=20, aoi_size=20, frame_read_forcenter=0,
                   N_loc=40, contrast=10, low=40, high=120,
                  blacklevel=30, whitelevel=200):
+        self.random_string = self.__gen_random_code(3)
         self.path_folder = os.path.abspath(path_folder)
         self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
         self.path_header_utf8 = self.path_header.encode('utf8')
@@ -91,7 +92,8 @@ class BinaryImage:
         self.image = image
         print('finish centering')
         bead_radius = self.radius_save.reshape((-1,1))
-        return bead_radius
+        random_string = self.random_string
+        return bead_radius, random_string
 
     ##  main for tracking all frames and all beads(cX, cY)
     def Track_All_Frames(self):
@@ -369,10 +371,11 @@ class BinaryImage:
 
     ##  show and save gray image
     def __show_grayimage(self, image, save=True):
+        random_string = self.random_string
         plt.figure()
         plt.imshow(image, cmap='gray', vmin=0, vmax=255)
         if save == True:
-            cv2.imwrite(os.path.join(self.path_folder, self.__gen_random_code(3)+'-output.png'), image)
+            cv2.imwrite(os.path.join(self.path_folder, random_string + '-output.png'), image)
 
     ##  add 2n-word random texts(n-word number and n-word letter)
     def __gen_random_code(self, n):

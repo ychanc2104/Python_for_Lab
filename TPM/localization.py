@@ -20,9 +20,9 @@ from basic.decorator import timing
 put_text = True
 criteria_dist = 20  # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
-frame_read_forcenter = 0  # no need to change, frame to autocenter beads
+frame_read_forcenter = 1100  # no need to change, frame to autocenter beads
 N_loc = 40  # number of frame to stack and localization
-contrast = 5
+contrast = 7
 blacklevel = 50
 whitelevel = 200
 low = 40
@@ -44,12 +44,12 @@ def localization(path_folder, read_mode, frame_setread_num, frame_start, criteri
                                 frame_read_forcenter=frame_read_forcenter,N_loc=N_loc, contrast=contrast,
                                 low=low, high=high,blacklevel=blacklevel,whitelevel=whitelevel,
                                )
-    bead_radius = Glimpse_data.Localize(put_text=put_text) # localize beads
+    bead_radius, random_string = Glimpse_data.Localize(put_text=put_text) # localize beads
 
-    return Glimpse_data, bead_radius
+    return Glimpse_data, bead_radius, random_string
 
 if __name__ == "__main__":
     path_folder = select_folder()
-    Glimpse_data, bead_radius = localization(path_folder, read_mode, frame_setread_num, frame_start, criteria_dist,
+    Glimpse_data, bead_radius, random_string = localization(path_folder, read_mode, frame_setread_num, frame_start, criteria_dist,
                                              aoi_size, frame_read_forcenter,N_loc, contrast, low, high,
                                              blacklevel, whitelevel, put_text)

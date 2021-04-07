@@ -28,19 +28,21 @@ def Analyzing(path_folder, read_mode, frame_setread_num, frame_start, criteria_d
                  aoi_size, frame_read_forcenter,N_loc, contrast, low, high,
                  blacklevel, whitelevel, put_text):
     ### Localization
-    Glimpse_data, bead_radius = localization(path_folder, read_mode, frame_setread_num, frame_start, criteria_dist,
+    Glimpse_data, bead_radius, random_string = localization(path_folder, read_mode, frame_setread_num, frame_start, criteria_dist,
                                              aoi_size, frame_read_forcenter, N_loc, contrast, low, high,
                                              blacklevel, whitelevel, put_text)
     ### Tracking
     tracking_results = Glimpse_data.Track_All_Frames()
     ### Saving results
-    Save_df = DataToSave(tracking_results, bead_radius, path_folder, frame_start=frame_start, med_fps=Glimpse_data.med_fps, window=20, factor_p2n=10000/180)
+    Save_df = DataToSave(tracking_results, bead_radius, path_folder, frame_start=frame_start,
+                         med_fps=Glimpse_data.med_fps, window=20, factor_p2n=10000/180,
+                         random_string=random_string)
     Save_df.Save_four_files()
     return Glimpse_data, Save_df
 
 ### parameters for tracking
 read_mode = 0 # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
-frame_setread_num = 21 # only useful when mode = 0, can't exceed frame number of a file
+frame_setread_num = 2000 # only useful when mode = 0, can't exceed frame number of a file
 frame_start = 0 ## starting frame for tracking
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ import pandas as pd
 ### Use for data saving and data reshaping
 class DataToSave:
     # data: np.array, path_folder: string path
-    def __init__(self, data, localization_results, path_folder, frame_start, med_fps, window, factor_p2n):
+    def __init__(self, data, localization_results, path_folder, frame_start, med_fps, window, factor_p2n, random_string=''):
         self.med_fps = med_fps
 
         self.columns = self.__get_df_sheet_names()
@@ -32,6 +32,7 @@ class DataToSave:
         self.sx_2D = np.array(self.df_reshape['sx'])
         self.sy_2D = np.array(self.df_reshape['sy'])
         self.df_reshape_analyzed = self.get_analyzed_data(self.df_reshape, window, med_fps, factor_p2n)
+        self.random_string = random_string
         self.random_string = self.__gen_random_code(3)
     ##  save four files
     def Save_four_files(self):
@@ -357,6 +358,10 @@ class DataToSave:
 
     ##  add 2n-word random texts(n-word number and n-word letter)
     def __gen_random_code(self, n):
-        digits = "".join([random.choice(string.digits) for i in range(n)])
-        chars = "".join([random.choice(string.ascii_letters) for i in range(n)])
-        return digits + chars
+        random_string = self.random_string
+        if len(random_string) == 0:
+            digits = "".join([random.choice(string.digits) for i in range(n)])
+            chars = "".join([random.choice(string.ascii_letters) for i in range(n)])
+            return digits + chars
+        else:
+            return random_string
