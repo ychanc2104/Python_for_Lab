@@ -34,20 +34,21 @@ def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
 class BinaryImage:
     def __init__(self, path_folder, read_mode=1, frame_setread_num=20,
                  criteria_dist=20, aoi_size=20, frame_read_forcenter=0,
-                 N_loc=40, contrast=10, low=40, high=120,
+                 frame_start=0, N_loc=40, contrast=10, low=40, high=120,
                  blacklevel=30, whitelevel=200):
         self.path_folder = os.path.abspath(path_folder)
         self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
         self.path_header_utf8 = self.path_header.encode('utf8')
         self.path_header_txt = os.path.abspath(os.path.join(path_folder, 'header.txt'))
         self.path_data = self.__get_path_data()
-        [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.getheader()
+        [self.frames_acquired, self.height, self.width, self.pixeldepth, self.med_fps] = self.getheader()
         self.data_type, self.size_a_image, self.frame_per_file = self.__getdatainfo()
         self.read_mode = read_mode
         self.frame_setread_num = frame_setread_num
         self.criteria_dist = criteria_dist
         self.aoi_size = aoi_size
         self.frame_read_forcenter = frame_read_forcenter
+        self.frame_start = frame_start
         self.N_loc = N_loc
         self.contrast = contrast
         self.low = low
@@ -56,30 +57,12 @@ class BinaryImage:
         self.whitelevel = whitelevel
         self.offset, self.fileNumber = self.__getoffset()
         self.cut_image_width = 30
-        # self.read1 = [] # one image at i
         self.readN = self.__readGlimpseN(frame_read_forcenter, N_loc)  # N image from i
-        self.contours = []
-        self.saved_contours = []
-        self.edges = []
         self.image = self.__stackimageN(self.readN)  # image used to be localized
-        self.image_aoi = []
-        self.cX = []
-        self.cY = []
-        self.perimeters = []
-        self.areas = []
-        self.radius_save = []
-        # self.intensity = []
-        # self.image_cut = []
-        # self.AOIimage = []
         self.x_fit = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
         self.y_fit = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-        self.bead_number = 0
         self.initial_guess = [40., 3., 3., aoi_size/2, aoi_size/2, 0., 10.]
-        self.initial_guess_beads = np.empty(0)
-        self.N = 0
-        self.dx_localization = np.empty(0)
-        self.dy_localization = np.empty(0)
-        self.tracking_results = []
+
 
     ###########################################################################
     ##  main for localization
@@ -113,6 +96,7 @@ class BinaryImage:
         cX = self.cX
         cY = self.cY
         frames_acquired = self.frames_acquired
+        frame_start = self.frame_start
         aoi_size = self.aoi_size
         read_mode = self.read_mode
         frame_setread_num = self.frame_setread_num
@@ -121,11 +105,12 @@ class BinaryImage:
         p0_1 = initial_guess_beads  # initialize fitting parameters for each bead
         tracking_results_list = []
         for i in range(N):
-            image = self.__readGlimpse1(frame_read_forcenter+i)
+            image = self.__readGlimpse1(frame_start+i)
             data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1)
             p0_1 = self.__update_p0(p0_1, p0_2, i)  # update fitting initial guess
             tracking_results_list += data
             print(f'frame {i}')
+        self.N = N
         self.initial_guess_beads = p0_1
         tracking_results = np.array(tracking_results_list)
         self.tracking_results = tracking_results
@@ -247,8 +232,8 @@ class BinaryImage:
         cX = []
         cY = []
         saved_contours = []
-        perimeters = self.perimeters
-        areas = self.areas
+        perimeters = []
+        areas = []
         for i in range(n_contours):
             c = contours[i]
             perimeters += [cv2.arcLength(c, True)]
@@ -264,6 +249,8 @@ class BinaryImage:
                 saved_contours += [c]
                 cX += [(M['m10'] / M['m00']) + cut]
                 cY += [(M['m01'] / M['m00']) + cut]
+        self.perimeters = perimeters
+        self.areas = areas
         self.saved_contours = np.array(saved_contours)
         cX = np.array(cX)
         cY = np.array(cY)
@@ -495,7 +482,7 @@ class BinaryImage:
             GetHeader = mydll.ReadHeader  # function name is ReadHeader
             # assign variable first (from LabVIEW)
             # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber,
-            # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (avg. fps (Hz)),uint32_t *Element0OfTTB,
+            # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (med. fps (Hz)),uint32_t *Element0OfTTB,
             # int32_t *RegionHeight, int32_t *RegionWidth,
             # uint32_t *FramesAcquired)
             # ignore array datatype in header.glimpse
@@ -519,7 +506,7 @@ class BinaryImage:
                       FramesAcquired)  # There are 8 variables.
             self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value,
                            PixelDepth.value, timeOf1stFrameSecSince1104.value]
-            ## header = [frames, height, width, pixeldepth, avg fps]
+            ## header = [frames, height, width, pixeldepth, med fps]
             return self.header
         else:  # is linux or others
             df = pd.read_csv(self.path_header_txt, sep='\t', header=None)
@@ -527,8 +514,8 @@ class BinaryImage:
             header_values = df[1].to_numpy()
             self.header = [int(header_values[0]), int(header_values[2]), int(header_values[1]), int(header_values[4]),
                            header_values[3]]
-            [self.frames_acquired, self.height, self.width, self.pixeldepth, self.avg_fps] = self.header
-            # header = [frames, height, width, pixeldepth, avg fps]
+            [self.frames_acquired, self.height, self.width, self.pixeldepth, self.med_fps] = self.header
+            # header = [frames, height, width, pixeldepth, med fps]
             return self.header
 
     ##  remove empty files and sort files by last modified time
