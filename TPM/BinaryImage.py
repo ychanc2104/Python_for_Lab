@@ -7,6 +7,7 @@ import struct
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
+import matplotlib.pylab as pylab
 import cv2
 import os
 from glob import glob
@@ -15,6 +16,7 @@ import pandas as pd
 import io
 import random
 import string
+
 
 ###  2-D Gaussian function with rotation angle
 def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
@@ -108,11 +110,16 @@ class BinaryImage:
         initial_guess, initial_guess_beads, N = self.__preparefit_info(read_mode, frame_setread_num, frames_acquired)
         p0_1 = initial_guess_beads  # initialize fitting parameters for each bead
         tracking_results_list = []
+        # plt.ion()
+        # fig, ax = plt.subplots()
         for i in range(N):
             image = self.__readGlimpse1(frame_start+i)
+            # ax.imshow(image)
+            # pylab.show()
             data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1)
             p0_1 = self.__update_p0(p0_1, p0_2, i)  # update fitting initial guess
             tracking_results_list += data
+            # fig.clear()
             print(f'frame {i}')
         self.N = N
         self.initial_guess_beads = p0_1
@@ -372,8 +379,11 @@ class BinaryImage:
     ##  show and save gray image
     def __show_grayimage(self, image, save=True):
         random_string = self.random_string
-        plt.figure()
-        plt.imshow(image, cmap='gray', vmin=0, vmax=255)
+        plt.ion()
+        fig, ax = plt.subplots()
+        # plt.figure()
+        ax.imshow(image, cmap='gray', vmin=0, vmax=255)
+        pylab.show()
         if save == True:
             cv2.imwrite(os.path.join(self.path_folder, random_string + '-output.png'), image)
 
@@ -442,6 +452,8 @@ class BinaryImage:
         return initial_guess, initial_guess_beads, N
 
     def __update_p0(self, p0_i, p0_f, i):  # p0 is n by m matrix, n is bead number and m is 7, i=0,1,2,3,...
+        # aoi_size = self.aoi_size
+        # bounds = self.__get_bounds(aoi_size)
         i += 1
         p0 = (p0_i * i + p0_f) / (i + 1)
         return p0
@@ -483,7 +495,10 @@ class BinaryImage:
     ### methods for getting header information
     def getheader(self):
         if platform == 'win32':
-            mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
+            try:
+                mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
+            except:
+                mydll = ctypes.windll.LoadLibrary('TPM/GetHeader.dll')
             GetHeader = mydll.ReadHeader  # function name is ReadHeader
             # assign variable first (from LabVIEW)
             # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber,
