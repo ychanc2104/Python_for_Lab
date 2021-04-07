@@ -32,9 +32,9 @@ def twoD_Gaussian(xy, amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset):
 
 ### define a class for all glimpse data
 class BinaryImage:
-    def __init__(self, path_folder, read_mode=1, frame_setread_num=20,
+    def __init__(self, path_folder, read_mode=1, frame_setread_num=20, frame_start=0,
                  criteria_dist=20, aoi_size=20, frame_read_forcenter=0,
-                 frame_start=0, N_loc=40, contrast=10, low=40, high=120,
+                  N_loc=40, contrast=10, low=40, high=120,
                  blacklevel=30, whitelevel=200):
         self.path_folder = os.path.abspath(path_folder)
         self.path_header = os.path.abspath(os.path.join(path_folder, 'header.glimpse'))
@@ -88,8 +88,10 @@ class BinaryImage:
         self.__show_grayimage(image, save=True)
         self.cX = cX
         self.cY = cY
+        self.image = image
         print('finish centering')
-        return image, cX, cY
+        bead_radius = self.radius_save.reshape((-1,1))
+        return bead_radius
 
     ##  main for tracking all frames and all beads(cX, cY)
     def Track_All_Frames(self):
