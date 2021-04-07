@@ -11,8 +11,9 @@ import pandas as pd
 ### Use for data saving and data reshaping
 class DataToSave:
     # data: np.array, path_folder: string path
-    def __init__(self, data, localization_results, path_folder, avg_fps, window, factor_p2n):
-        self.avg_fps = avg_fps
+    def __init__(self, data, localization_results, path_folder, frame_start, med_fps, window, factor_p2n):
+        self.med_fps = med_fps
+
         self.columns = self.__get_df_sheet_names()
         self.localization_results = localization_results
         self.df = pd.DataFrame(data=data, columns=self.columns)
@@ -21,14 +22,16 @@ class DataToSave:
         self.filename_time = self.__get_date()
         self.bead_number = int(max(1 + self.df['aoi']))
         self.frame_acquired = int(len(self.df['x']) / self.bead_number)
-        self.frame_start = 0 # starting frame for statistics
+        self.frame_start = frame_start # starting frame for statistics
         self.frame_n = self.frame_acquired # frame number for statistics
-        self.df_reshape = self.__get_reshape_data(self.df, avg_fps)
+        self.time = self.__get_time()[frame_start:frame_start+self.frame_n]
+        self.time_sliding, self.time_fixing = self.__get_sftime(window=window)
+        self.df_reshape = self.__get_reshape_data(self.df, med_fps)
         self.x_2D = np.array(self.df_reshape['x'])
         self.y_2D = np.array(self.df_reshape['y'])
         self.sx_2D = np.array(self.df_reshape['sx'])
         self.sy_2D = np.array(self.df_reshape['sy'])
-        self.df_reshape_analyzed = self.get_analyzed_data(self.df_reshape, window, avg_fps, factor_p2n)
+        self.df_reshape_analyzed = self.get_analyzed_data(self.df_reshape, window, med_fps, factor_p2n)
         self.random_string = self.__gen_random_code(3)
     ##  save four files
     def Save_four_files(self):
@@ -117,9 +120,9 @@ class DataToSave:
         return np.array(criteria)
 
     ## get anaylyzed data, BM, sxsy,xy ratio...
-    def get_analyzed_data(self, df_reshape, window, avg_fps, factor_p2n):
+    def get_analyzed_data(self, df_reshape, window, med_fps, factor_p2n):
         bead_number = self.bead_number
-        analyzed_data = self.append_analyed_data(factor_p2n, avg_fps, window)
+        analyzed_data = self.append_analyed_data(factor_p2n, med_fps, window)
         analyzed_sheet_names = self.__get_analyzed_sheet_names()
         df_reshape_analyzed = df_reshape.copy()
         # save data to dictionary of DataFrame
@@ -137,13 +140,13 @@ class DataToSave:
 
 
     ##  append BM, sx_sy, xy_ratio, mean, std to analyzed_data
-    def append_analyed_data(self, factor_p2n, avg_fps, window):
+    def append_analyed_data(self, factor_p2n, med_fps, window):
         x_2D = self.x_2D
         y_2D = self.y_2D
         sx_2D = self.sx_2D
         sy_2D = self.sy_2D
         frame_acquired = self.frame_acquired
-        avg_fps = self.avg_fps
+        med_fps = self.med_fps
 
         BMx_sliding, BMx_fixing = self.calBM_2D(x_2D, factor_p2n=factor_p2n, window=window)
         BMy_sliding, BMy_fixing = self.calBM_2D(y_2D, factor_p2n=factor_p2n, window=window)
@@ -152,8 +155,8 @@ class DataToSave:
 
         data_analyzed_med, data_analyzed_avg, data_analyzed_std = self.__med_avg_std_operator(BMx_sliding, BMx_fixing,
                                                                                         BMy_sliding, BMy_fixing, sx_sy,
-                                                                                        xy_ratio[0][:int(2*avg_fps)], xy_ratio[1][:int(2*avg_fps/20)],
-                                                                                        xy_ratio[2][:int(2*avg_fps)])
+                                                                                        xy_ratio[0][:int(2*med_fps)], xy_ratio[1][:int(2*med_fps/20)],
+                                                                                        xy_ratio[2][:int(2*med_fps)])
         data_reshaped_med, data_reshaped_avg, data_reshaped_std = self.__df_reshape_med_avg_std_operator(self.df_reshape)
         # append data or time together
         data_reshaped_avg = np.append(data_reshaped_avg, self.localization_results, axis=1)
@@ -162,12 +165,46 @@ class DataToSave:
         data_std_2D = np.append(data_analyzed_std, data_reshaped_std, axis=1)
 
         analyzed_data = [BMx_sliding, BMy_sliding, BMx_fixing, BMy_fixing, sx_sy, xy_ratio[0], xy_ratio[1], xy_ratio[2]]
-        analyzed_data = self.__append_time(analyzed_data, avg_fps, frame_acquired, window=20)
+        analyzed_data = self.__append_time(analyzed_data, med_fps, frame_acquired, window=20)
         analyzed_data = analyzed_data + [data_med_2D, data_avg_2D, data_std_2D]
         return analyzed_data
 
+    ##  get time axis for each frame
+    def __get_time(self):
+        med_fps = self.med_fps
+        path_folder = self.path_folder
+
+        path_header_time = os.path.join(path_folder, 'header-time.txt')
+        exist = os.path.exists(path_header_time)
+        if exist == True:
+            df_time = pd.read_csv(path_header_time, sep='\t')
+            time = np.array(df_time)
+        else:
+            time = np.array([i / med_fps for i in range(self.frame_acquired)])
+        return time
+
+    ##  get time-axis for sliding and fixing window
+    def __get_sftime(self, window=20):
+        time = self.time
+        frame_acquired = self.frame_acquired
+        time_sliding = []
+        iteration_sliding = frame_acquired - window + 1
+        for i in range(iteration_sliding):
+            time_pre = time[i: i + window]
+            time_sliding += [np.mean(time_pre)]
+        time_fixing = []
+        iteration_fixing = int(frame_acquired / window)  # fix window
+        for i in range(iteration_fixing):
+            time_pre = time[i * window: (i + 1) * window]
+            time_fixing += [np.mean(time_pre)]
+        self.time_sliding = np.array(time_sliding)
+        self.time_fixing = np.array(time_fixing)
+        return np.array(time_sliding), np.array(time_fixing)
+
+
     ### data:1D numpy array for a bead, BM: 1D numpy array
     def __calBM_1D(self, data, window=20, factor_p2n=10000/180, method='sliding'):
+        time = self.time
         if method == 'sliding':  # overlapping
             iteration = len(data) - window + 1  # silding window
             BM_s = []
@@ -243,30 +280,37 @@ class DataToSave:
         return np.array(data_med).T, np.array(data_avg).T, np.array(data_std).T
 
     ## get reshape data all
-    def __get_reshape_data(self, df, avg_fps):
+    def __get_reshape_data(self, df, med_fps):
         frame_acquired = self.frame_acquired
         df_reshape = dict()
         for i, sheet_name in enumerate(df.columns):
             if i > 1:
-                df_reshape[sheet_name] = self.__gather_reshape_sheets(df, sheet_name, frame_acquired, avg_fps)
+                df_reshape[sheet_name] = self.__gather_reshape_sheets(df, sheet_name, frame_acquired, med_fps)
         return df_reshape
 
     ##  save each attributes to each sheets, data:2D array
-    def __gather_reshape_sheets(self, df, sheet_name, frame_acquired, avg_fps):
+    def __gather_reshape_sheets(self, df, sheet_name, frame_acquired, med_fps):
         bead_number = self.bead_number
         name = self.__get_columns(sheet_name, bead_number)
         data = self.__get_attrs(df[sheet_name], bead_number, frame_acquired)
-        data = np.array(self.__append_time([data], avg_fps, frame_acquired))
+        data = np.array(self.__append_time([data], med_fps, frame_acquired))
         data = np.reshape(data, (frame_acquired, bead_number + 1))
         df_reshape = pd.DataFrame(data=data, columns=name).set_index('time')
         return df_reshape
 
     ##  add time axis into first column, data: list of 2D array,(r,c)=(frame,bead)
-    def __append_time(self, analyzed_data, avg_fps, frames_acquired, window=20):
-        dt = window/avg_fps/2
+    def __append_time(self, analyzed_data, med_fps, frames_acquired, window=20):
+        time_sliding = self.time_sliding
+        time_fixing = self.time_fixing
+        dt = (window-1)/med_fps/2
         analyzed_append_data = []
         for data in analyzed_data:
-            time = dt + np.arange(0, data.shape[0]) / avg_fps * math.floor(frames_acquired / data.shape[0])
+            if len(data) == len(time_sliding):
+                time = time_sliding
+            elif len(data) == len(time_fixing):
+                time = time_fixing
+            else:
+                time = dt + np.arange(0, data.shape[0]) / med_fps * math.floor(frames_acquired / data.shape[0])
             time = np.reshape(time, (-1, 1))
             analyzed_append_data += [np.append(time, data, axis=1)]
         return analyzed_append_data
