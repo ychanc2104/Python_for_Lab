@@ -9,7 +9,7 @@ loss function is un-differentiable
 
 
 ##
-
+from basic.filter import MA
 from ChangePoint_Finding.gen_assembly import *
 import pandas as pd
 from basic.select import select_file
@@ -88,9 +88,12 @@ def gradescent(data, p_initial, tol=1e-2):
             m = beta1 * m + (1 - beta1) * grad
             v_adam = beta2 * v_adam + (1 - beta2) * grad**2    
         i += 1
-    return np.array(p).astype(int), converged, criteria_stop
+    p = np.array(p).astype(int)
+    Res = lossfun(data, p)
+    return p, converged, criteria_stop, Res
 
-def plotresult(data_ori, p):
+def plotresult(data_ori, p, dt=0.03):
+    data_filter = MA(data_ori, 60)
     BM_initial_fit = np.mean(data_ori[:p[0]])
     BM_final_fit = np.mean(data_ori[p[1]:])
     
@@ -100,11 +103,13 @@ def plotresult(data_ori, p):
     curve_drop_fit = np.linspace(BM_initial_fit, BM_final_fit, t_drop_fit)
     curve_final_fit = BM_final_fit * np.ones(len(data_ori) - p[1])
     data_fit = np.append(np.append(curve_initial_fit,curve_drop_fit), curve_final_fit)
+    t_fit = np.arange(0, len(data_fit)) * dt
     fig, ax = plt.subplots(figsize=(10,8))
-    ax.plot(data_ori)
-    t_fit = np.arange(len(data_fit))
-    ax.plot(data_fit)
-    ax.set_xlabel('Frame')
+    ax.plot(t_fit, data_ori, '.', color='grey', markersize=2)
+    ax.plot(t_fit, data_filter, '.', color='k', markersize=3)
+
+    ax.plot(t_fit, data_fit, '-', color='r', linewidth=4)
+    ax.set_xlabel('Time (s)')
     ax.set_ylabel('BM (nm)')
     plt.show()
     return BM_initial_fit, BM_final_fit, velocity
@@ -114,16 +119,16 @@ def plotresult(data_ori, p):
 if __name__ == "__main__":
     ##  parameters
     t_initial = 200
-    t_final = 500
+    t_final = 1000
 
     ##  simluate data
-    t, data_ori = gen_assembly(BM=[BM_initial, BM_final], t_change=[t_initial, t_final])
+    t, data_ori = gen_assembly(BM=[BM_initial, BM_final], t_change=[t_initial, t_final], noise=[5,5])
     data = nordata(data_ori)
     p_soln = [t_initial, t_final]
 
     ##  gradient descent
     p_initial = np.array([250, 300])
-    p, converged, criteria_stop = gradescent(data, p_initial, tol=5e-2)
+    p, converged, criteria_stop, Res = gradescent(data, p_initial, tol=5e-3)
     BM_initial_fit, BM_final_fit, velocity = plotresult(data_ori, p)
 
     plt.figure()
