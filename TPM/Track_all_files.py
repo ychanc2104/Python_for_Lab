@@ -24,9 +24,10 @@ from glob import glob
 import os
 
 ### parameters for tracking
-read_mode = 0 ## mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+read_mode = 1 ## mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
 frame_setread_num = 21 ## only useful when mode = 0, can't exceed frame number of a file
 frame_start = 0 ## starting frame for tracking
+IC = True
 
 if __name__ == "__main__":
     path_folder = select_folder()
@@ -34,4 +35,4 @@ if __name__ == "__main__":
     for path_folder in path_folders:
         Glimpse_data, Save_df = Analyzing(path_folder, read_mode, frame_setread_num, frame_start, criteria_dist,
                                           aoi_size, frame_read_forcenter, N_loc, contrast, low, high,
-                                          blacklevel, whitelevel, put_text)
+                                          blacklevel, whitelevel, put_text, IC)

@@ -17,13 +17,14 @@ from basic.select import select_folder
 from basic.decorator import timing
 
 ### parameters for localization
+frame_read_forcenter = 5000  # no need to change, frame to autocenter beads
+N_loc = 10  # number of frame to stack and localization
+contrast = 3
+
 put_text = True
-criteria_dist = 20  # beabs are closer than 'criteria_dist' will remove
+criteria_dist = 10  # beabs are closer than 'criteria_dist' will remove
 aoi_size = 20
-frame_read_forcenter = 1100  # no need to change, frame to autocenter beads
-N_loc = 40  # number of frame to stack and localization
-contrast = 7
-blacklevel = 50
+blacklevel = 40
 whitelevel = 200
 low = 40
 high = 120
@@ -53,3 +54,7 @@ if __name__ == "__main__":
     Glimpse_data, bead_radius, random_string = localization(path_folder, read_mode, frame_setread_num, frame_start, criteria_dist,
                                              aoi_size, frame_read_forcenter,N_loc, contrast, low, high,
                                              blacklevel, whitelevel, put_text)
+
+    cX = Glimpse_data.cX
+    cY = Glimpse_data.cY
+

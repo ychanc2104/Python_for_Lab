@@ -20,43 +20,37 @@ Flowchart
 """
 
 ### import used modules first
-from TPM.BinaryImage import BinaryImage
+from TPM.localization import *
 from TPM.localization import select_folder
-import time
+import matplotlib.pyplot as plt
 
-
-selected_aoi = 10
-frame_i = 0
-N = 50
+selected_aoi = 52
+N = 100
 
 read_mode = 0  # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+frame_start = 0 ## starting frame for tracking
 frame_setread_num = N  # only useful when mode = 0, can't exceed frame number of a file
-
-criteria_dist = 30  # beabs are closer than 'criteria_dist' will remove
-aoi_size = 30
-frame_read_forcenter = 0  # no need to change, frame to autocenter beads
-N_loc = 40  # number of frame to stack and localization
-contrast = 12
-low = 40
-high = 120
-blacklevel = 30
-
-
 
 if __name__ == "__main__":
     path_folder = select_folder()
-    t1 = time.time()
 
-    Glimpse_data = BinaryImage(path_folder, criteria_dist=criteria_dist, aoi_size=aoi_size,
-                               frame_read_forcenter=frame_read_forcenter, N_loc=N_loc,
-                               contrast=contrast, low=low, high=high, blacklevel=blacklevel)
-    image, cX, cY = Glimpse_data.Localize()  # localize beads
-    tracking_results = Glimpse_data.Track_All_Frames(read_mode, frame_setread_num)
-    Glimpse_data.Get_fitting_video_offline(selected_aoi=selected_aoi, frame_i=frame_i, N=N)
+    ### Localization
+    Glimpse_data, bead_radius, random_string = localization(path_folder, read_mode, frame_setread_num, frame_start, criteria_dist,
+                                             aoi_size, frame_read_forcenter, N_loc, contrast, low, high,
+                                             blacklevel, whitelevel, put_text)
 
-    time_spent = time.time() - t1
-    print('spent ' + str(time_spent) + ' s')
+    tracking_results = Glimpse_data.Track_All_Frames(selected_aoi, IC=True)
+    Glimpse_data.Get_fitting_video_offline(selected_aoi=0, frame_i=frame_start, N=N)
 
+
+    cX = Glimpse_data.cX[selected_aoi]
+    cY = Glimpse_data.cY[selected_aoi]
+    image = Glimpse_data.image
+    row = int(cY)  # cY, height
+    col = int(cX)  # cX, width
+    size_half = int(aoi_size / 2)
+    image_cut = image[row - size_half:(row + size_half), col - size_half:(col + size_half)]
+    image_aoi = Glimpse_data.image_aoi
 
 
 

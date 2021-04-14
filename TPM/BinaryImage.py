@@ -64,7 +64,9 @@ class BinaryImage:
         self.image = self.__stackimageN(self.readN)  # image used to be localized
         self.x_fit = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
         self.y_fit = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
-        self.initial_guess = [40., 3., 3., aoi_size/2, aoi_size/2, 0., 10.]
+        self.background = np.mean(self.image)
+        self.initial_guess = [10., 2., 2., aoi_size/2, aoi_size/2, 0., self.background]
+        self.image_cut = []
 
 
     ###########################################################################
@@ -77,14 +79,11 @@ class BinaryImage:
         cX, cY = self.getXY(contours)
 
         ##  need to sort according to X first and select
-        cX, cY = self.__sortXY(cX, cY)
-        cX, cY = self.select_XY(cX, cY, self.criteria_dist)
-        cX, cY, amplitude = self.get_accurate_xy(image, cX, cY)
-        cX, cY, amplitude = self.get_accurate_xy(image, cX, cY)
-
-        # cX, cY = self.select_XY(cX, cY, self.criteria_dist)
-        # intensity = self.getintensity(image, cX, cY, self.aoi_size)
-        cX, cY, amplitude = self.removeblack(cX, cY, amplitude, self.blacklevel)
+        for i in range(2):
+            cX, cY = self.__sortXY(cX, cY)
+            cX, cY = self.select_XY(cX, cY, self.criteria_dist)
+            cX, cY, amplitude = self.get_accurate_xy(image, cX, cY)
+            cX, cY, amplitude = self.removeblack(cX, cY, amplitude, self.blacklevel)
 
         self.bead_number = len(cX)
         image = self.__drawAOI(image, cX, cY, self.aoi_size, put_text=put_text)
@@ -98,9 +97,8 @@ class BinaryImage:
         return bead_radius, random_string
 
     ##  main for tracking all frames and all beads(cX, cY)
-    def Track_All_Frames(self):
-        cX = self.cX
-        cY = self.cY
+    def Track_All_Frames(self, selected_aoi=None, IC=False):
+
         frames_acquired = self.frames_acquired
         frame_start = self.frame_start
         aoi_size = self.aoi_size
@@ -108,30 +106,36 @@ class BinaryImage:
         frame_setread_num = self.frame_setread_num
         frame_read_forcenter = self.frame_read_forcenter
         initial_guess, initial_guess_beads, N = self.__preparefit_info(read_mode, frame_setread_num, frames_acquired)
+        if selected_aoi == None:
+            cX = self.cX
+            cY = self.cY
+        else:
+            cX = np.array(self.cX[selected_aoi], ndmin=1)
+            cY = np.array(self.cY[selected_aoi], ndmin=1)
+            initial_guess_beads = np.array(initial_guess_beads[selected_aoi], ndmin=2)
+
         p0_1 = initial_guess_beads  # initialize fitting parameters for each bead
         tracking_results_list = []
-        # plt.ion()
-        # fig, ax = plt.subplots()
+
         for i in range(N):
             image = self.__readGlimpse1(frame_start+i)
-            # ax.imshow(image)
-            # pylab.show()
-            data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1)
+            data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1,IC=IC)
             p0_1 = self.__update_p0(p0_1, p0_2, i)  # update fitting initial guess
             tracking_results_list += data
-            # fig.clear()
             print(f'frame {i}')
         self.N = N
         self.initial_guess_beads = p0_1
         tracking_results = np.array(tracking_results_list)
         self.tracking_results = tracking_results
+        self.aoi = [cX, cY]
         return tracking_results
 
     ##  main for getting fit-video of an aoi
     def Get_fitting_video_offline(self, selected_aoi, frame_i, N):
         tracking_results = self.tracking_results
-        cX = self.cX
-        cY = self.cY
+        # cX = self.cX
+        # cY = self.cY
+        cX, cY = self.aoi
         x = self.x_fit
         y = self.y_fit
         n_fit = len(x)
@@ -140,20 +144,27 @@ class BinaryImage:
         tracking_results_select = self.get_aoi_from_tracking_results(tracking_results, selected_aoi)
         imageN = self.__readGlimpseN(frame_i, N=N)
         fourcc = cv2.VideoWriter_fourcc(*'H264')
-        output_movie = cv2.VideoWriter(os.path.abspath(path_folder) + '/fitting2.mp4', fourcc, 5.0, (1200, 800))
+        output_movie = cv2.VideoWriter(os.path.abspath(path_folder) + f'/{self.random_string}-fitting2.mp4', fourcc, 5.0, (1200, 800))
+        i=0
         for image, tracking_result_select in zip(imageN, tracking_results_select):
             image_aoi, intensity = self.__getAOI(image, cY[selected_aoi], cX[selected_aoi], aoi_size)
             para_fit = tracking_result_select[2:9]
             data_fitted = twoD_Gaussian((x, y), *para_fit)
             fig, ax = plt.subplots(1, 1)
-            ax.imshow(image_aoi, cmap=plt.cm.gray, origin='lower',
-                      extent=(x.min(), x.max(), y.min(), y.max()))
+            # ax.imshow(image_aoi, cmap=plt.cm.gray, origin='lower',
+            #           extent=(x.min(), x.max(), y.min(), y.max()))
+            ax.imshow(image_aoi)
+
             ax.contour(x, y, data_fitted.reshape(n_fit, n_fit), 5, colors='r')
             # ax.contour(x, y, data_fitted.reshape(20, 20), 5)
             plot_img_np = self.get_img_from_fig(fig)
             plot_img_np = cv2.resize(plot_img_np, (1200, 800))
             output_movie.write(plot_img_np)
+            plt.close()
+            print(f'storing frame {i}')
+            i+= 1
         self.image_aoi = image_aoi
+        self.ax = ax
         output_movie.release()
 
     ###############################################################################
@@ -167,14 +178,14 @@ class BinaryImage:
         y = popt_beads[:, 4]
         self.dx_localization = x - aoi_size/2
         self.dy_localization = y - aoi_size/2
-        self.initial_guess_beads = popt_beads
+        self.initial_guess_beads = initial_guess_beads
         self.amplitude = amplitude
         cX = cX + self.dx_localization
         cY = cY + self.dy_localization
         return cX, cY, amplitude
 
     ##  tracking position of all beads in a image, get all parameters and frame number
-    def trackbead(self, image, cX, cY, aoi_size, frame, initial_guess_beads):
+    def trackbead(self, image, cX, cY, aoi_size, frame, initial_guess_beads, IC=False):
         bead_number = len(cX)
         data = []
         bounds = self.__get_bounds(aoi_size)
@@ -184,6 +195,13 @@ class BinaryImage:
         initial_guess = self.initial_guess
         for j in range(bead_number):
             image_tofit, intensity = self.__getAOI(image, cY[j], cX[j], aoi_size)
+            x_guess = np.argmax(image_tofit)%aoi_size
+            y_guess = np.argmax(image_tofit)//aoi_size
+            initial_guess[3:5] = [x_guess, y_guess]
+            if IC==True:
+                contrast = 8
+                image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
+                image_tofit = np.array(image_tofit)
             # if intensity < 3500:
             #     contrast = 2
             #     image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
@@ -197,8 +215,10 @@ class BinaryImage:
             # image_contrasted = enh_con.enhance(contrast)
             # image_tofit = np.array(image_contrasted)
             try:
-                popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), initial_guess_beads[j, :],
-                                           bounds=bounds)
+                # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), initial_guess_beads[j, :],
+                #                            bounds=bounds)
+                popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), initial_guess,
+                                           bounds=bounds, method='trf')
                 ss_res = self.__get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
                 # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
                 # data_fitted = twoD_Gaussian((x, y), *popt)
@@ -276,16 +296,21 @@ class BinaryImage:
         n = len(cX1)
         cX_selected = np.empty(0)
         cY_selected = np.empty(0)
+        r_selected = np.empty(0)
         index = []
         for i in range(n):
             x2 = cX1[i]
             y2 = cY1[i]
+            r = np.sqrt(x2**2 + y2**2)
             c1 = abs(x2-cX_selected) >= criteria
             c2 = abs(y2-cY_selected) >= criteria
-            c = np.array([c1 or c2 for c1,c2 in zip(c1,c2)]) ## get boolean array for outside of criteria distance
+            c3 = abs(r-r_selected) >= criteria
+            c = np.array([c1 or c2 or c3 for c1,c2,c3 in zip(c1,c2,c3)]) ## get boolean array for outside of criteria distance
             if all(c) or (i==0): ## collecting centers, every point should qualify
                 cX_selected = np.append(cX_selected, x2)
                 cY_selected = np.append(cY_selected, y2)
+                r = np.sqrt(x2**2 + y2**2)
+                r_selected = np.append(r_selected, r)
                 index += [i]
         self.radius_save = self.radius_save[index]
         self.saved_contours = self.saved_contours[index]
@@ -327,6 +352,7 @@ class BinaryImage:
         cX = cX[index]
         cY = cY[index]
         amplitude = amplitude[index]
+        self.initial_guess_beads = self.initial_guess_beads[index]
         self.amplitude = amplitude
         self.radius_save = self.radius_save[index]
         self.saved_contours = self.saved_contours[index]
@@ -438,7 +464,8 @@ class BinaryImage:
     ## get bounds for curve_fit
     def __get_bounds(self, aoi_size=20):
         ## (amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset)
-        bounds = ((0, 0, 0, 0, 0, 0, 0), (255, aoi_size, aoi_size, aoi_size - 1, aoi_size - 1, 90, 255))
+        bounds = ((1, 0.5, 0.5, 0, 0, 0, 0), (255, aoi_size/2, aoi_size/2, aoi_size-1, aoi_size-1, 90, 255))
+        self.bounds = bounds
         return bounds
 
     ## get parameters for trackbead fitting
@@ -452,8 +479,6 @@ class BinaryImage:
         return initial_guess, initial_guess_beads, N
 
     def __update_p0(self, p0_i, p0_f, i):  # p0 is n by m matrix, n is bead number and m is 7, i=0,1,2,3,...
-        # aoi_size = self.aoi_size
-        # bounds = self.__get_bounds(aoi_size)
         i += 1
         p0 = (p0_i * i + p0_f) / (i + 1)
         return p0
