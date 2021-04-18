@@ -5,14 +5,17 @@ rcParams.update({'font.size': 18})
 import numpy as np
 import matplotlib.pyplot as plt
 
-def binning(data, bin_number, xlabel='value', ylabel='probability density', show=True):
+def binning(data, bin_number, xlabel='value', ylabel='probability density', show=True, density=True):
     count, edges = np.histogram(data, bin_number)
     center = []
     edges = list(edges)
     for i in range(len(edges) - 1):
         center += [(edges[i] + edges[i + 1]) / 2]
     binsize = center[1] - center[0]
-    pd = count/sum(count)/binsize
+    if density == True:
+        pd = count/sum(count)/binsize
+    else:
+        pd = count
     fig, ax = plt.subplots(figsize=(10,8))
     ax.bar(center, pd, width=binsize, color="silver", edgecolor="white")
     ax.set_xlabel(f'{xlabel}', fontsize=22)
@@ -21,7 +24,7 @@ def binning(data, bin_number, xlabel='value', ylabel='probability density', show
         plt.close(fig)
     return pd, center, fig, ax
 
-def binning2(data, binwidth, start=None, end=None, xlabel='value', ylabel='probability density', show=True):
+def binning2(data, binwidth, start=None, end=None, xlabel='value', ylabel='probability density', show=True, density=True):
     if start==None:
         start = min(data)
     if end == None:
@@ -29,7 +32,7 @@ def binning2(data, binwidth, start=None, end=None, xlabel='value', ylabel='proba
     bin_edge = np.arange(start, end+1, binwidth)
     center = np.arange(start+binwidth/2, end-binwidth/2+1, binwidth)
     fig, ax = plt.subplots(figsize=(10, 8))
-    pd, edges, patches = plt.hist(data, bins=bin_edge, density=True)
+    pd, edges, patches = plt.hist(data, bins=bin_edge, density=density)
     ax.bar(center, pd, width=binwidth, color="silver", edgecolor="white")
     ax.set_xlabel(f'{xlabel}', fontsize=22)
     ax.set_ylabel(f'{ylabel}', fontsize=22)
