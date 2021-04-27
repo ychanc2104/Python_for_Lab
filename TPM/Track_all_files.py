@@ -24,8 +24,8 @@ from glob import glob
 import os
 
 ### parameters for tracking
-read_mode = 1 ## mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
-frame_setread_num = 21 ## only useful when mode = 0, can't exceed frame number of a file
+read_mode = 0 ## mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
+frame_setread_num = 100 ## only useful when mode = 0, can't exceed frame number of a file
 frame_start = 0 ## starting frame for tracking
 IC = True
 

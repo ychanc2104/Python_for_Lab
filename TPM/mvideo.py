@@ -24,11 +24,11 @@ from TPM.localization import *
 from TPM.localization import select_folder
 import matplotlib.pyplot as plt
 
-selected_aoi = 52
+selected_aoi = 15
 N = 100
 
 read_mode = 0  # mode = 0 is only calculate 'frame_setread_num' frame, other numbers(default) present calculate whole glimpsefile
-frame_start = 0 ## starting frame for tracking
+frame_start = 9000 ## starting frame for tracking
 frame_setread_num = N  # only useful when mode = 0, can't exceed frame number of a file
 
 if __name__ == "__main__":

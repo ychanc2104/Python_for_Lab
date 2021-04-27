@@ -17,7 +17,7 @@ from basic.select import select_folder
 from basic.decorator import timing
 
 ### parameters for localization
-frame_read_forcenter = 5000  # no need to change, frame to autocenter beads
+frame_read_forcenter = 9500  # no need to change, frame to autocenter beads
 N_loc = 10  # number of frame to stack and localization
 contrast = 3
 
