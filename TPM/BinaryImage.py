@@ -65,7 +65,7 @@ class BinaryImage:
         self.x_fit = np.array([[i for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
         self.y_fit = np.array([[j for i in range(aoi_size)] for j in range(aoi_size)]).astype(float)
         self.background = np.mean(self.image)
-        self.initial_guess = [10., 2., 2., aoi_size/2, aoi_size/2, 0., self.background]
+        self.initial_guess = [50., 2., 2., aoi_size/2, aoi_size/2, 0., self.background]
         self.image_cut = []
 
 
@@ -120,7 +120,7 @@ class BinaryImage:
         for i in range(N):
             image = self.__readGlimpse1(frame_start+i)
             data, p0_2 = self.trackbead(image, cX, cY, aoi_size, frame=i, initial_guess_beads=p0_1,IC=IC)
-            p0_1 = self.__update_p0(p0_1, p0_2, i)  # update fitting initial guess
+            # p0_1 = self.__update_p0(p0_1, p0_2, i)  # update fitting initial guess
             tracking_results_list += data
             print(f'frame {i}')
         self.N = N
@@ -195,9 +195,10 @@ class BinaryImage:
         initial_guess = self.initial_guess
         for j in range(bead_number):
             image_tofit, intensity = self.__getAOI(image, cY[j], cX[j], aoi_size)
-            x_guess = np.argmax(image_tofit)%aoi_size
-            y_guess = np.argmax(image_tofit)//aoi_size
-            initial_guess[3:5] = [x_guess, y_guess]
+            initial_guess = self.__get_guess(image_tofit)
+            # x_guess = np.argmax(image_tofit)%aoi_size
+            # y_guess = np.argmax(image_tofit)//aoi_size
+            # initial_guess[3:5] = [x_guess, y_guess]
             if IC==True:
                 contrast = 8
                 image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
@@ -482,6 +483,15 @@ class BinaryImage:
         i += 1
         p0 = (p0_i * i + p0_f) / (i + 1)
         return p0
+
+    def __get_guess(self, image_tofit):
+        aoi_size = self.aoi_size
+        amp_guess = np.max(image_tofit)
+        x_guess = np.argmax(image_tofit) % aoi_size
+        y_guess = np.argmax(image_tofit) // aoi_size
+        background = self.background
+        initial_guess = [amp_guess, 2.5, 2.5, x_guess, y_guess, 0, background]
+        return initial_guess
 
     ###############################################################################
     ### methods for image reading
