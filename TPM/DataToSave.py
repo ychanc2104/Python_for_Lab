@@ -11,9 +11,10 @@ import pandas as pd
 ### Use for data saving and data reshaping
 class DataToSave:
     # data: np.array, path_folder: string path
-    def __init__(self, data, localization_results, path_folder, frame_start, med_fps, window, factor_p2n, random_string=''):
+    def __init__(self, data, localization_results, path_folder, frame_start, med_fps, window, factor_p2n, BM_lower=10, BM_upper=200, random_string=''):
         self.med_fps = med_fps
-
+        self.BM_lower = BM_lower
+        self.BM_upper = BM_upper
         self.columns = self.__get_df_sheet_names()
         self.localization_results = localization_results
         self.df = pd.DataFrame(data=data, columns=self.columns)
@@ -107,16 +108,18 @@ class DataToSave:
 
     ##  get selection criteria
     def get_criteria(self, df_reshape_analyzed):
-        ratio = df_reshape_analyzed['avg_attrs'][['xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared']]
-        radius = df_reshape_analyzed['avg_attrs']['bead_radius']
+        BM_lower = self.BM_lower
+        BM_upper = self.BM_upper
+        ratio = df_reshape_analyzed['med_attrs'][['xy_ratio_sliding', 'xy_ratio_fixing', 'sx_over_sy_squared']]
+        BMx_med = df_reshape_analyzed['med_attrs']['BMx_sliding']
         ratio = np.nan_to_num(ratio)
-        radius = np.array(radius).reshape((ratio.shape[0], 1))
+        BMx_med = np.array(BMx_med).reshape((BMx_med.shape[0], 1))
         c_ratio = ((ratio > 0.80) & (ratio < 1.2))
-        c_radius = (radius > 1) & (radius < 10)
-        c = np.append(c_ratio, c_radius, axis=1)
+        c_BM = (BMx_med > BM_lower) & (BMx_med < BM_upper)
+        c = np.append(c_ratio, c_BM, axis=1)
         criteria = []
         for row_boolean in c:
-            criteria += [any(row_boolean)]
+            criteria += [all(row_boolean)]
 
         return np.array(criteria)
 
@@ -135,7 +138,7 @@ class DataToSave:
                 df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, 
                                                                columns=self.__get_attrs_col()).set_index(self.__get_columns('bead', data.shape[0])[1:])
             else:
-                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data, 
+                df_reshape_analyzed[sheet_name] = pd.DataFrame(data=data,
                                                                columns=self.__get_columns(sheet_name, bead_number)).set_index('time')
         return df_reshape_analyzed
 
