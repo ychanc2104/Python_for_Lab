@@ -123,13 +123,67 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   v_adam = beta2 * v_adam + (1 - beta2) * grad**2
   ```
 
+* **Find gradient using tensorflow**
+
+  We can easily derive the gradient of any loss function using tensorflow, 
+  so we don't need to actually find the analytical solution of derivative loss function.
+  
+  ```
+  ##  target function
+  def function(x, args):
+      p1 = args[0]
+      p2 = args[1]
+      p3 = args[2]
+      return p1*x + p2*x**2 + p3*x**3
+  
+  ##  simulate data with noise
+  x = np.arange(-2, 6, 0.05)
+  data = function(x, [10.0, 7, 5]) + normal(len(x), 0, 100)
+  
+  ##  gradient
+  with tf.GradientTape() as tape:
+      y_pred = function(x, p_var)
+      y_true = data
+      ##  lose function is sum of squared error
+      loss = tf.reduce_sum(tf.pow(y_pred - y_true, 2))
+      grad = tape.gradient(loss, p_var).numpy()
+  ```
+
+* **Demonstrations**
+
+  First, we model a set of data, **p<sub>1</sub>(x - p<sub>2</sub>)<sup>3</sup> + p<sub>3</sub>x<sup>4</sup>**
+  with p<sub>1</sub> = 10.0, p<sub>2</sub> = 3.0, p<sub>3</sub> = 1.0 and add Gaussian noise N(0, 30).
+  
+  ![images][105]
+
+  Next, we use Adam method and set learning rate is 0.05. 
+  Set the stopping criteria is difference of &Delta;parameters < 0.001.
+
+  ![images][106]
+
+  ![images][107]
+
+  Fitting results show below,
+  p<sub>1</sub> = 8.592, p<sub>2</sub> = 3.050, p<sub>3</sub> = 0.973.
+  
+  Because p<sub>1</sub>x term is relative small to p<sub>2</sub>x<sup>2</sup>
+  and p<sub>3</sub>x<sup>3</sup>, p<sub>1</sub> fitting result slightly
+  deviate from true value.
+  
+  ![images][108]
+
+
+
 
 [1]: https://ruder.io/optimizing-gradient-descent/
 [2]: https://www.tensorflow.org/guide/autodiff?hl=zh-tw
 
 
-[101]: doc/img/AdaGrad.png
-[102]: doc/img/RSMprop.png
-[103]: doc/img/Momentum.png
-[104]: doc/img/Adam.png
-
+[101]: doc/img/CP/AdaGrad.png
+[102]: doc/img/CP/RSMprop.png
+[103]: doc/img/CP/Momentum.png
+[104]: doc/img/CP/Adam.png
+[105]: doc/img/CP/data.png
+[106]: doc/img/CP/grad_0.05.png
+[107]: doc/img/CP/params_0.05.png
+[108]: doc/img/CP/data_fit.png

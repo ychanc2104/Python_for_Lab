@@ -4,11 +4,11 @@ from basic.noise import normal
 import tensorflow as tf
 
 ##  target function
-def qradratic(x, args):
+def function(x, args):
     p1 = args[0]
     p2 = args[1]
     p3 = args[2]
-    return p1*(x - p2)**3 + p3*x**4
+    return p1*x + p2*x**2 + p3*x**3
 
 ##  aim: minimize sum square error
 def loss_fun_tf(function, x, data, p_var):
@@ -20,7 +20,7 @@ def loss_fun_tf(function, x, data, p_var):
 ##  gradient of loss function
 def grad_loss_tf(loss_fun_tf, x, data, p_var):
     with tf.GradientTape() as tape:
-        loss = loss_fun_tf(qradratic, x, data, p_var)
+        loss = loss_fun_tf(function, x, data, p_var)
         grad = tape.gradient(loss, p_var).numpy()
         return grad
 
@@ -49,26 +49,22 @@ def init_params(grad):
 
 
 ##  simulate data with noise
-x = np.arange(-5, 5, 0.05)
-data = qradratic(x, [10.0, 2, 5]) + normal(len(x), 0, 100)
+x = np.arange(-9, 8, 0.05)
+data = function(x, [10, 3, 1]) + normal(len(x), 0, 30)
 
 ##  preparing initial values
-p = [15.0, 0.0, 0.0]
+p = [8.0, 10.0, 0.0]
 grad = grad_loss_tf(loss_fun_tf, x, data, tf.Variable(p))
 converged = False
 i = 0
 tol = 1e-3
-method = 'RSMprop'
+method = 'Adam'
 n, ep, alpha, sigma, v, lamda, beta1, beta2, m, v_adam = init_params(grad)
-l = 0.002 ## learning rate
+l = 0.02 ## learning rate
 
 p_try, grad_all = [], []
 while ((not converged or i < 50) and (i < 5000)):
     with tf.GradientTape() as tape:
-        p_var = tf.Variable(p)
-        grad_all += [grad_loss_tf(loss_fun_tf, x, data, p_var)]
-        grad = grad_all[-1]
-
         if method == 'AdaGrad':
             n += grad**2
             l_t = l/np.sqrt(n + ep)
@@ -86,7 +82,11 @@ while ((not converged or i < 50) and (i < 5000)):
             m = beta1 * m + (1 - beta1) * grad
             v_adam = beta2 * v_adam + (1 - beta2) * grad**2
 
+        p_var = tf.Variable(p)
+        grad_all += [grad_loss_tf(loss_fun_tf, x, data, p_var)]
+
         converged = all(abs(p_new - p) < tol)
+        grad = grad_all[-1]
         i += 1
         p_try += [p]
         p = p_new
@@ -94,11 +94,17 @@ while ((not converged or i < 50) and (i < 5000)):
 
 fig, ax = plt.subplots()
 ax.plot(np.array(p_try))
+ax.set_xlabel('iteration', fontsize=16)
+ax.set_ylabel('papameters', fontsize=16)
 print(f'solutions are {p_try[-1]}')
 
 fig, ax = plt.subplots()
 ax.plot(np.array(grad_all))
+ax.set_xlabel('iteration', fontsize=16)
+ax.set_ylabel('gradient', fontsize=16)
 
 fig, ax = plt.subplots()
 ax.plot(x, data)
-ax.plot(x, qradratic(x, p_try[-1]), 'r--')
+ax.set_xlabel('x', fontsize=16)
+ax.set_ylabel('f(x)', fontsize=16)
+ax.plot(x, function(x, p_try[-1]), 'r--')
