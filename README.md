@@ -151,7 +151,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 
 * **Demonstrations**
 
-  First, we model a set of data, **p<sub>1</sub>(x - p<sub>2</sub>)<sup>3</sup> + p<sub>3</sub>x<sup>4</sup>**
+  First, we model a set of data, **p<sub>1</sub>x + p<sub>2</sub>x<sup>2</sup> + p<sub>3</sub>x<sup>3</sup>**
   with p<sub>1</sub> = 10.0, p<sub>2</sub> = 3.0, p<sub>3</sub> = 1.0 and add Gaussian noise N(0, 30).
   
   ![images][105]
