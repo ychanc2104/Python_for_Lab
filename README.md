@@ -138,7 +138,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   ##  simulate data with noise
   x = np.arange(-2, 6, 0.05)
-  data = function(x, [10.0, 7, 5]) + normal(len(x), 0, 100)
+  data = function(x, [10.0, 7, 5]) + normal(len(x), 0, 30)
   
   ##  gradient
   with tf.GradientTape() as tape:
@@ -149,22 +149,30 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
       grad = tape.gradient(loss, p_var).numpy()
   ```
 
-* **Demonstrations**
+* **Find solutions using gradient descent**
 
+
+
+
+
+* **Demonstrations**
+  
   First, we model a set of data, **p<sub>1</sub>x + p<sub>2</sub>x<sup>2</sup> + p<sub>3</sub>x<sup>3</sup>**
   with p<sub>1</sub> = 10.0, p<sub>2</sub> = 3.0, p<sub>3</sub> = 1.0 and add Gaussian noise N(0, 30).
   
   ![images][105]
 
-  Next, we use Adam method and set learning rate is 0.05. 
-  Set the stopping criteria is difference of &Delta;parameters < 0.001.
+  1.**Batch gradient descent**
+
+  Next, we use Adam method and set learning rate is 0.5. 
+  Set the stopping criteria is &Delta;parameters < 0.001.
 
   ![images][106]
 
   ![images][107]
 
   Fitting results show below,
-  p<sub>1</sub> = 8.592, p<sub>2</sub> = 3.050, p<sub>3</sub> = 0.973.
+  p<sub>1</sub> = 9.800, p<sub>2</sub> = 2.972, p<sub>3</sub> = 1.002.
   
   Because p<sub>1</sub>x term is relative small to p<sub>2</sub>x<sup>2</sup>
   and p<sub>3</sub>x<sup>3</sup>, p<sub>1</sub> fitting result slightly
@@ -172,18 +180,52 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   ![images][108]
 
+  Time-consuming is 11.696 seconds.
 
+  Details see TEST_batchGradDescent.py.
+
+  2.**mini batch gradient descent**
+
+  [mini batch gradient descent][3] is a modified version of 
+  [stochastic gradient descent(SGD)][4], which update 
+  model parameters using a portion of samples instead of 
+  one sample(SGD) or all samples(BGD). 
+  
+  Advantages are faster convergence and saving RAM consumption
+  compared with typical gradient descent.
+
+  We set batch_size = 32 and max_epoch = 150 to make iteration 
+  roughly equal to iteration in 1.
+
+  ![images][109]
+
+  ![images][110]
+
+  Fitting results show below,
+  p<sub>1</sub> = 9.904, p<sub>2</sub> = 2.975, p<sub>3</sub> = 1.008.
+  
+  ![images][111]
+
+  Time-consuming is 9.353 seconds.
+  About 20% faster than batch gradient descent method.
+  
+  Details see TEST_mini-batchGradDescent.py.
 
 
 [1]: https://ruder.io/optimizing-gradient-descent/
 [2]: https://www.tensorflow.org/guide/autodiff?hl=zh-tw
-
+[3]: https://towardsdatascience.com/batch-mini-batch-stochastic-gradient-descent-7a62ecba642a
+[4]: https://en.wikipedia.org/wiki/Stochastic_gradient_descent
 
 [101]: doc/img/CP/AdaGrad.png
 [102]: doc/img/CP/RSMprop.png
 [103]: doc/img/CP/Momentum.png
 [104]: doc/img/CP/Adam.png
 [105]: doc/img/CP/data.png
-[106]: doc/img/CP/grad_0.05.png
-[107]: doc/img/CP/params_0.05.png
-[108]: doc/img/CP/data_fit.png
+[106]: doc/img/CP/grad_0.5_BGD.png
+[107]: doc/img/CP/params_0.5_BGD.png
+[108]: doc/img/CP/data_fit_0.5_BGD.png
+
+[109]: doc/img/CP/grad_0.5_miniBGD.png
+[110]: doc/img/CP/params_0.5_miniBGD.png
+[111]: doc/img/CP/data_fit_0.5_miniBGD.png

@@ -16,8 +16,7 @@ from basic.select import select_file
 
 ##
 def slopecurve(data, p):
-    t1 = int(p[0])
-    t2 = int(p[1])
+    t1, t2 = int(p[0]), int(p[1])
     c1 = np.nanmean(data[0:t1])
     c2 = np.nanmean(data[t2:])
     curve = np.linspace(c1, c2, abs(t2 - t1))
@@ -26,14 +25,29 @@ def slopecurve(data, p):
 
 def lossfun(data, p):
     # p: [t1, t2]
-    t1 = int(p[0])
-    t2 = int(p[1])
-    c1 = np.mean(data[0:t1])
-    c2 = np.mean(data[t2:])
-    sse1 = sum((data[0:t1] - c1)**2)
-    sse2 = sum((data[t2:] - c2)**2)
-    sse3 = sum((data[t1:t2] - slopecurve(data, p))**2)
-    return sse1 + sse2 + sse3
+    p_ori = p.copy()
+    p = np.append(0, p) # add 0 at initial
+    p = np.append(p, len(data))
+    mode = ['mean', 'slope', 'mean']
+    M, SSE = [], []
+    for i in range(len(p)-1):
+        D = data[p[i]:p[i+1]]
+        if mode[i] == 'mean':
+            M += [np.mean(D)]
+        else:
+            M += [slopecurve(data, p_ori)]
+        SSE = np.append(SSE, sum((D-M[-1])**2))
+    Res = sum(SSE)
+    return Res
+
+    # t1 = int(p[0])
+    # t2 = int(p[1])
+    # c1 = np.mean(data[0:t1])
+    # c2 = np.mean(data[t2:])
+    # sse1 = sum((data[0:t1] - c1)**2)
+    # sse2 = sum((data[t2:] - c2)**2)
+    # sse3 = sum((data[t1:t2] - slopecurve(data, p))**2)
+    # return sse1 + sse2 + sse3
 
 def gradL(data, p):
     grad_t1 = lossfun(data, [p[0]+1, p[1]]) - lossfun(data, p)
@@ -134,3 +148,16 @@ if __name__ == "__main__":
     plt.figure()
     plt.plot(criteria_stop)
 
+    p_ori = p.copy()
+    p = np.append(0, p) # add 0 at initial
+    p = np.append(p, len(data))
+    mode = ['mean', 'slope', 'mean']
+    M, SSE = [], []
+    for i in range(len(p)-1):
+        D = data[p[i]:p[i+1]]
+        if mode[i] == 'mean':
+            M += [np.mean(D)]
+        else:
+            M += [slopecurve(data, p_ori)]
+        SSE = np.append(SSE, sum((D-M[-1])**2))
+    RES = sum(SSE)
