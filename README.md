@@ -26,6 +26,10 @@
 
   `(myvenv) computer@user:~$ `
 
+  4.Exit 
+  
+  `$ deactivate`
+
 
 * **Install required packages in venv**
 
@@ -151,9 +155,30 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 
 * **Find solutions using gradient descent**
 
+  We implement four adaptive learning methods below,
+  
+  ```
+  with tf.GradientTape() as tape:
+      if method == 'AdaGrad':
+          n += grad**2
+          l_t = l/np.sqrt(n + ep)
+          p_new = p - l_t * grad  # update fitting parameters
+      elif method == 'RSMprop':
+          sigma = np.sqrt(alpha * sigma**2 + (1-alpha) * grad**2 + ep)
+          p_new = p - l/sigma * grad
+      elif method == 'Momentum':
+          v = lamda * v - l * grad
+          p_new = p + v
+      else: #default is Adam
+          m_hat = m / (1 - beta1)
+          v_adam_hat = v_adam / (1 - beta2)
+          p_new = p - l * m_hat / (np.sqrt(v_adam_hat) + ep)
+          m = beta1 * m + (1 - beta1) * grad
+          v_adam = beta2 * v_adam + (1 - beta2) * grad**2
+  ```
 
-
-
+  Create a loop to continuously execute code above, and you 
+  can get converged model parameters.
 
 * **Demonstrations**
   
@@ -211,11 +236,172 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   Details see TEST_mini-batchGradDescent.py.
 
+> **EM_Algorithm**
+
+  [Expectation maximization][5] is an approach to implement 
+  maximum likelihood estimation.
+
+  There are two steps involved, "Expectation Step"(E-step) 
+  and "Maximization Step"(M-step).
+  
+  **E-step: Calculate the "responsibility" of each sample i under current 
+  model parameters**
+
+  ![images][112]
+
+  **M-step: Update model parameters using responsibilities**
+  
+  Example for Gaussian mixture model(GMM)
+  ![images][113]
+
+  Back to E-step until parameters converged.
+
+* **Demonstrations**
+
+  **1.Simulate Gaussian mixture dataset with four components**
+  
+  fraction = [0.25, 0.25, 0.25, 0.25], 
+  
+  &mu; = [6, 12, 18, 24], 
+  
+  &sigma; = [1, 2, 1, 2]
+
+  ```
+  import numpy as np
+  import random
+  
+  def gen_gauss(mean, std, n_sample):
+      data = []
+      for m,s,n in zip(mean,std,n_sample):
+          for i in range(n):
+              data = np.append(data, random.gauss(m, s))
+      return data
+  
+  ##  simulate data
+  n_sample = 200
+  data = gen_gauss(mean=[6,12,18,24], std=[2,1,2,1], n_sample=[n_sample]*4)
+  data = data.reshape(-1,1)
+  n_sample = len(data)
+  ```
+
+  **2.Automatically find components in GMM input parameter**
+  
+  We can apply [Bayesian information criterion(BIC)][6] or 
+  [Akaike information criterion(AIC)][7] to find the most probable
+  components in your dataset.
+  
+  Because of BIC with larger penalty term, BIC is prone to
+  choose simpler model with fewer parameters.
+
+  **3.Fit GMM**
+
+  ```
+  from EM_Algorithm.EM import *
+  
+  ##  fit GMM
+  EMg = EM(data)
+  opt_components = EMg.opt_components(tolerance=1e-2, mode='GMM', criteria='AIC', figure=False)
+  
+  f, m, s, converged = EMg.GMM(opt_components, tolerance=1e-2, rand_init=True)
+  EMg.plot_EM_results()
+  EMg.plot_fit_gauss(scatter='True')
+  ```
+
+  EM fitting converge to  
+  
+  fraction = [0.246, 0.250, 0.258, 0.245]
+  
+  mean = [5.9, 12.0, 18.1, 24.1]
+  
+  std = [2.2, 1.0, 2.0, 1.0]
+  
+  Consistent with simulated parameters.  
+
+  ![images][114]
+
+  Fitting results show below and overlay with 
+  histogram.
+
+  ![images][115]
+
+  **4.Two-dimension data**
+
+  We assume a situation below,
+
+  ![images][116]
+
+  a protein motor with two distinct movement mode,
+  (X<sub>1</sub>, T<sub>1</sub>) and (X<sub>2</sub>, T<sub>2</sub>).
+  
+  Random variable of step size, X is Gaussian distribution and the distribution 
+  of dwell time, T is f(t) = ke<sup>-kt</sup>.
+
+  We collect(simulate) all pair of X and T.
+
+  Model parameters below,
+
+  n_sample = [1000, 1000]
+
+  mean = [4, 6]
+
+  std = [1.5, 2.0]
+
+  tau = [2, 4]
+
+  ```
+  from EM_Algorithm.gen_gauss import gen_gauss
+  from EM_Algorithm.gen_poisson import gen_poisson
+  from EM_Algorithm.EM import *
+  
+  n_sample = 1000
+  m_set = [4, 6]
+  s_set = [1.5, 2]
+  tau_set = [2, 4]
+  data_g = gen_gauss(mean=m_set, std=s_set, n_sample=[n_sample, n_sample])
+  data_p = gen_poisson(tau=tau_set, n_sample=[n_sample, n_sample])
+  ```
+  
+  Scattering plot below,
+  ![images][117]  
+
+  Use 2-D EM to infer model parameters,
+
+  ```
+  data = np.array([data_g, data_p]).T
+  EM_gp = EM(data, dim=2)
+  opt_components = EM_gp.opt_components(tolerance=1e-2, mode='GPEM')
+  f1, m, s1, tau, converged = EM_gp.GPEM(opt_components, tolerance=1e-2, rand_init=False)
+  EM_gp.plot_EM_results()
+  EM_gp.plot_gp_contour()
+  ```
+  Parameters converged,
+  ![images][118]  
+  
+  Separated two joint-distribution using EM,
+  ![images][119]  
+
+  gauss fraction is [0.58 0.42]
+  
+  gauss center is [4.0 6.3]
+  
+  expected is [4, 6]
+
+  gauss std is [1.5 1.9]
+  
+  expected is [1.5, 2.0]
+  
+  dwell time is [2.2 4.0]
+  
+  expected is [2, 4]
+
 
 [1]: https://ruder.io/optimizing-gradient-descent/
 [2]: https://www.tensorflow.org/guide/autodiff?hl=zh-tw
 [3]: https://towardsdatascience.com/batch-mini-batch-stochastic-gradient-descent-7a62ecba642a
 [4]: https://en.wikipedia.org/wiki/Stochastic_gradient_descent
+[5]: https://ibug.doc.ic.ac.uk/media/uploads/documents/expectation_maximization-1.pdf
+[6]: https://en.wikipedia.org/wiki/Bayesian_information_criterion
+[7]: https://en.wikipedia.org/wiki/Akaike_information_criterion
 
 [101]: doc/img/CP/AdaGrad.png
 [102]: doc/img/CP/RSMprop.png
@@ -229,3 +415,11 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 [109]: doc/img/CP/grad_0.5_miniBGD.png
 [110]: doc/img/CP/params_0.5_miniBGD.png
 [111]: doc/img/CP/data_fit_0.5_miniBGD.png
+[112]: doc/img/EM/EM_E-step.png
+[113]: doc/img/EM/EM_M-step.png
+[114]: doc/img/EM/EM_progress.png
+[115]: doc/img/EM/EM_results.png
+[116]: doc/img/EM/Gauss_Poi_trace.png
+[117]: doc/img/EM/Gauss_Poi_scatter.png
+[118]: doc/img/EM/Gauss_Poi_parameters.png
+[119]: doc/img/EM/Gauss_Poi_fit.png
