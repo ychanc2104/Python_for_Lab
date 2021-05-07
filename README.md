@@ -236,6 +236,41 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   Details see TEST_mini-batchGradDescent.py.
 
+  3.**Real case**
+
+  We have a reaction scheme below.
+  Aim is to find change-points in traces.
+
+  **1.Simulated data with two change-points at 400 and 1000.**
+
+  ![images][112]  
+
+      Initial BM = 20
+      
+      Final BM = 70
+    
+      Slope = (70-20)/(1000-400) = 0.083
+
+  **2.Norm of gradient converge to zero.**
+
+  Secondly, use custom-built gradient descent to find
+  
+  Norm of gradient of each iteration shown below,
+
+  ![images][113]  
+
+  Fitting results shown below,
+
+  ![images][114]
+
+      Change-points = [395, 998]
+
+      Initial BM fit = 19.8
+      
+      Final BM = 69.9
+    
+      Slope = 0.083
+
 > **EM_Algorithm**
 
   [Expectation maximization][5] is an approach to implement 
@@ -247,12 +282,12 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   **E-step: Calculate the "responsibility" of each sample i under current 
   model parameters**
 
-  ![images][112]
+  ![images][121]
 
   **M-step: Update model parameters using responsibilities**
   
   Example for Gaussian mixture model(GMM)
-  ![images][113]
+  ![images][122]
 
   Back to E-step until parameters converged.
 
@@ -317,18 +352,18 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   Consistent with simulated parameters.  
 
-  ![images][114]
+  ![images][123]
 
   Fitting results show below and overlay with 
   histogram.
 
-  ![images][115]
+  ![images][124]
 
   **4.Two-dimension data**
 
   We assume a situation below,
 
-  ![images][116]
+  ![images][125]
 
   a protein motor with two distinct movement mode,
   (X<sub>1</sub>, T<sub>1</sub>) and (X<sub>2</sub>, T<sub>2</sub>).
@@ -362,7 +397,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   ```
   
   Scattering plot below,
-  ![images][117]  
+  ![images][126]  
 
   Use 2-D EM to infer model parameters,
 
@@ -375,24 +410,22 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   EM_gp.plot_gp_contour()
   ```
   Parameters converged,
-  ![images][118]  
+  ![images][127]  
   
   Separated two joint-distribution using EM,
-  ![images][119]  
+  ![images][128]  
 
-  gauss fraction is [0.58 0.42]
-  
-  gauss center is [4.0 6.3]
-  
-  expected is [4, 6]
+  **gauss fraction is [0.58 0.42]** ([0.50, 0.50])
 
-  gauss std is [1.5 1.9]
+  **gauss center is [4.0 6.3]** ([4, 6])
+
+  **gauss std is [1.5 1.9]** ([1.5, 2.0])
   
-  expected is [1.5, 2.0]
-  
-  dwell time is [2.2 4.0]
-  
-  expected is [2, 4]
+  **dwell time is [2.2 4.0]** ([2, 4])
+
+    Details show in EM_test_GauPoi.py.
+
+> **Frequency analysis**
 
 
 [1]: https://ruder.io/optimizing-gradient-descent/
@@ -415,11 +448,16 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 [109]: doc/img/CP/grad_0.5_miniBGD.png
 [110]: doc/img/CP/params_0.5_miniBGD.png
 [111]: doc/img/CP/data_fit_0.5_miniBGD.png
-[112]: doc/img/EM/EM_E-step.png
-[113]: doc/img/EM/EM_M-step.png
-[114]: doc/img/EM/EM_progress.png
-[115]: doc/img/EM/EM_results.png
-[116]: doc/img/EM/Gauss_Poi_trace.png
-[117]: doc/img/EM/Gauss_Poi_scatter.png
-[118]: doc/img/EM/Gauss_Poi_parameters.png
-[119]: doc/img/EM/Gauss_Poi_fit.png
+[112]: doc/img/CP/CP_trace.png
+[113]: doc/img/CP/CP_norm_grad.png
+[114]: doc/img/CP/CP_trace_fit.png
+
+
+[121]: doc/img/EM/EM_E-step.png
+[122]: doc/img/EM/EM_M-step.png
+[123]: doc/img/EM/EM_progress.png
+[124]: doc/img/EM/EM_results.png
+[125]: doc/img/EM/Gauss_Poi_trace.png
+[126]: doc/img/EM/Gauss_Poi_scatter.png
+[127]: doc/img/EM/Gauss_Poi_parameters.png
+[128]: doc/img/EM/Gauss_Poi_fit.png

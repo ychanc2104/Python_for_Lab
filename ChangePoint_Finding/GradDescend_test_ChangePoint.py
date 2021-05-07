@@ -20,14 +20,14 @@ def slopecurve(data, p):
     c1 = np.nanmean(data[0:t1])
     c2 = np.nanmean(data[t2:])
     curve = np.linspace(c1, c2, abs(t2 - t1))
-
     return curve
 
 def lossfun(data, p):
     # p: [t1, t2]
-    p_ori = p.copy()
+    p = np.array(p)
+    p_ori = p.copy().astype('int')
     p = np.append(0, p) # add 0 at initial
-    p = np.append(p, len(data))
+    p = np.append(p, len(data)).astype('int')
     mode = ['mean', 'slope', 'mean']
     M, SSE = [], []
     for i in range(len(p)-1):
@@ -73,7 +73,6 @@ def gradescent(data, p_initial, tol=1e-2):
     beta2 = np.array([0.999, 0.999])
     m = beta1 * np.array([0.0, 0.0]) + (1 - beta1) * grad
     v_adam = beta2 * np.array([0.0, 0.0]) + (1 - beta2) * grad**2
-
 
     criteria_stop = []
     i = 1
@@ -121,7 +120,6 @@ def plotresult(data_ori, p, dt=0.03):
     fig, ax = plt.subplots(figsize=(10,8))
     ax.plot(t_fit, data_ori, '.', color='grey', markersize=2)
     ax.plot(t_fit, data_filter, '.', color='k', markersize=3)
-
     ax.plot(t_fit, data_fit, '-', color='r', linewidth=4)
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('BM (nm)')
@@ -129,12 +127,12 @@ def plotresult(data_ori, p, dt=0.03):
     return BM_initial_fit, BM_final_fit, velocity
 
 
-
 if __name__ == "__main__":
     ##  parameters
-    t_initial = 200
+    t_initial = 400
     t_final = 1000
-
+    BM_initial = 20
+    BM_final = 70
     ##  simluate data
     t, data_ori = gen_assembly(BM=[BM_initial, BM_final], t_change=[t_initial, t_final], noise=[5,5])
     data = nordata(data_ori)
@@ -144,20 +142,13 @@ if __name__ == "__main__":
     p_initial = np.array([250, 300])
     p, converged, criteria_stop, Res = gradescent(data, p_initial, tol=5e-3)
     BM_initial_fit, BM_final_fit, velocity = plotresult(data_ori, p)
+    fig, ax = plt.subplots(figsize=(10,8))
 
-    plt.figure()
-    plt.plot(criteria_stop)
+    ax.plot(criteria_stop)
+    ax.set_xlabel('iteration', fontsize=16)
+    ax.set_ylabel('| gradient |', fontsize=16)
 
-    p_ori = p.copy()
-    p = np.append(0, p) # add 0 at initial
-    p = np.append(p, len(data))
-    mode = ['mean', 'slope', 'mean']
-    M, SSE = [], []
-    for i in range(len(p)-1):
-        D = data[p[i]:p[i+1]]
-        if mode[i] == 'mean':
-            M += [np.mean(D)]
-        else:
-            M += [slopecurve(data, p_ori)]
-        SSE = np.append(SSE, sum((D-M[-1])**2))
-    RES = sum(SSE)
+    print(f'change points are {p}\n'
+          f'BM_initial is {BM_initial_fit}\n'
+          f'BM_final is {BM_final_fit}\n'
+          f'velocity is {velocity} nm/s')
