@@ -187,7 +187,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   ![images][105]
 
-  1.**Batch gradient descent**
+  **1.Batch gradient descent**
 
   Next, we use Adam method and set learning rate is 0.5. 
   Set the stopping criteria is &Delta;parameters < 0.001.
@@ -200,7 +200,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   p<sub>1</sub> = 9.800, p<sub>2</sub> = 2.972, p<sub>3</sub> = 1.002.
   
   Because p<sub>1</sub>x term is relative small to p<sub>2</sub>x<sup>2</sup>
-  and p<sub>3</sub>x<sup>3</sup>, p<sub>1</sub> fitting result slightly
+  and p<sub>3</sub>x<sup>3</sup>, p<sub>1</sub> fitting results slightly
   deviate from true value.
   
   ![images][108]
@@ -209,7 +209,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 
   Details see TEST_batchGradDescent.py.
 
-  2.**mini batch gradient descent**
+  **2.mini batch gradient descent**
 
   [mini batch gradient descent][3] is a modified version of 
   [stochastic gradient descent(SGD)][4], which update 
@@ -226,7 +226,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 
   ![images][110]
 
-  Fitting results show below,
+  Fitting results are shown below,
   p<sub>1</sub> = 9.904, p<sub>2</sub> = 2.975, p<sub>3</sub> = 1.008.
   
   ![images][111]
@@ -236,7 +236,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   Details see TEST_mini-batchGradDescent.py.
 
-  3.**Real case**
+  **3.Real case**
 
   We have a reaction scheme below.
   Aim is to find change-points in traces.
@@ -253,13 +253,13 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 
   **2.Norm of gradient converge to zero.**
 
-  Secondly, use custom-built gradient descent to find
+  Secondly, use custom-built gradient descent to find change-points.
   
-  Norm of gradient of each iteration shown below,
+  The norm of gradient of each iteration are shown below,
 
   ![images][113]  
 
-  Fitting results shown below,
+  Fitting results are shown below,
 
   ![images][114]
 
@@ -287,6 +287,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   **M-step: Update model parameters using responsibilities**
   
   Example for Gaussian mixture model(GMM)
+
   ![images][122]
 
   Back to E-step until parameters converged.
@@ -354,7 +355,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 
   ![images][123]
 
-  Fitting results show below and overlay with 
+  Fitting results are shown below and overlay with 
   histogram.
 
   ![images][124]
@@ -423,9 +424,52 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   **dwell time is [2.2 4.0]** ([2, 4])
 
-    Details show in EM_test_GauPoi.py.
+    Details are shown in EM_test_GauPoi.py.
 
 > **Frequency analysis**
+
+* **Fourier transform properties**
+
+  We have a continuous signal with frequency **B** Hz.
+  Then, measure with sampling rate, **f<sub>s</sub>** and acquire sample size, **N**.
+
+  **1.Frequency resolution**
+  
+  Determined by number of sample size, 
+  
+  **&Delta;f = f<sub>s</sub>/N**.
+   
+  **2.Detectable bandwidth**
+  
+  Govern by ["Sampling Theorem"][8].
+  It says **"for a given sampling rate f<sub>s</sub>, perfect reconstitution
+  is guaranteed for signal frequency, B < f<sub>s</sub>/2"**
+  
+  Our observed window is **f<sub>s</sub>/2**.
+
+
+* **Demonstrations**
+
+  Generate signal with equally step-size = 10 in the below,
+
+  ![images][131]
+  
+  According to [Wiener–Khinchin theorem][31], power spectrum can be
+  derived from Fourier transform of auto-correlation function. 
+  
+  **Aim: Find the step size** 
+
+  1.Calculate auto-correlation of spatial histogram,
+
+  ![images][132]
+
+  2.Calculate Fourier transform of auto-correlation,
+  
+  Major peak is 0.1 (1/10) which consistent with simulation.
+  ![images][133]
+  
+  
+  Details are shown in test_PSD_method.py.
 
 
 [1]: https://ruder.io/optimizing-gradient-descent/
@@ -435,6 +479,8 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 [5]: https://ibug.doc.ic.ac.uk/media/uploads/documents/expectation_maximization-1.pdf
 [6]: https://en.wikipedia.org/wiki/Bayesian_information_criterion
 [7]: https://en.wikipedia.org/wiki/Akaike_information_criterion
+[8]: https://en.wikipedia.org/wiki/Nyquist%E2%80%93Shannon_sampling_theorem
+[31]: https://en.wikipedia.org/wiki/Wiener%E2%80%93Khinchin_theorem
 
 [101]: doc/img/CP/AdaGrad.png
 [102]: doc/img/CP/RSMprop.png
@@ -461,3 +507,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 [126]: doc/img/EM/Gauss_Poi_scatter.png
 [127]: doc/img/EM/Gauss_Poi_parameters.png
 [128]: doc/img/EM/Gauss_Poi_fit.png
+
+[131]: doc/img/FT/demo_signal.png
+[132]: doc/img/FT/ACF.png
+[133]: doc/img/FT/PSD.png

@@ -48,6 +48,14 @@ freq_conn, psd_conn = PSD_connect.get_PSD()
 t_AFC = np.mean(np.array(t_AFC_all), axis=0)
 AFC = np.mean(np.array(AFC_all), axis=0)
 
+
+signal_plt = signal_connect[0:1000]
+time = np.arange(len(signal_plt))/fs
+
+fig, ax = plt.subplots(figsize=(10,8))
+ax.plot(time, signal_plt)
+ax.set_xlabel('time (s)')
+ax.set_ylabel('signal')
 # psd = np.mean(np.array(psd_all), axis=0)
 # freq = np.mean(np.array(freq_all), axis=0)
 # fig, ax = plt.subplots(figsize=(10,8))
@@ -61,7 +69,7 @@ fig, ax = plt.subplots(figsize=(10,8))
 # t_AFC = np.sort(t_AFC_all)
 # AFC = psd_all_c[np.argsort(t_AFC_all)]
 ax.plot(t_AFC, AFC, '-')
-ax.set_xlim(0, 20)
+ax.set_xlim(0, 60)
 # ax.set_xlim(0, 100)
 # ax.set_ylim(0.000, 0.1)
 ax.set_xlabel('Distance (count)')
