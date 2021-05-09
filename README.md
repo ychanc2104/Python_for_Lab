@@ -234,7 +234,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   Time-consuming is 9.353 seconds.
   About 20% faster than batch gradient descent method.
   
-  Details see TEST_mini-batchGradDescent.py.
+  Details are shown in ChangePoint_Finding/TEST_mini-batchGradDescent.py.
 
   **3.Real case**
 
@@ -270,6 +270,8 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
       Final BM = 69.9
     
       Slope = 0.083
+
+  Details are shown in ChangePoint_Finding/GradDescend_test_ChangePoint.py.
 
 > **EM_Algorithm**
 
@@ -424,7 +426,7 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   **dwell time is [2.2 4.0]** ([2, 4])
 
-    Details are shown in EM_test_GauPoi.py.
+    Details are shown in EM_Algorithm/EM_test_GauPoi.py.
 
 > **Frequency analysis**
 
@@ -443,9 +445,9 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   
   Govern by ["Sampling Theorem"][8].
   It says **"for a given sampling rate f<sub>s</sub>, perfect reconstitution
-  is guaranteed for signal frequency, B < f<sub>s</sub>/2"**
+  is guaranteed for signal with frequency, B < f<sub>s</sub>/2"**
   
-  Our observed window is **f<sub>s</sub>/2**.
+  Therefore, our observed window is **0 to f<sub>s</sub>/2 Hz**.
 
 
 * **Demonstrations**
@@ -455,21 +457,84 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
   ![images][131]
   
   According to [Wiener–Khinchin theorem][31], power spectrum can be
-  derived from Fourier transform of auto-correlation function. 
+  derived from Fourier transform of auto-correlation function of a wide-sense-stationary random process. 
   
   **Aim: Find the step size** 
 
-  1.Calculate auto-correlation of spatial histogram,
+  **1.Calculate auto-correlation of spatial histogram,**
 
   ![images][132]
 
-  2.Calculate Fourier transform of auto-correlation,
+  **2.Calculate Fourier transform of auto-correlation,**
   
   Major peak is 0.1 (1/10) which consistent with simulation.
   ![images][133]
   
+  Details are shown in OT/test_PSD_method.py.
+
+
+> **Image analysis**
+
+Our goals are to localize multiple beads at a time and track all objects
+at each frame.
+
+* **Objects localization**
+
+  We generate a bead at center = (10.5, 11.6).
+
+  ![images][141]
+
+  **1.Find contours of objects**
   
-  Details are shown in test_PSD_method.py.
+  We use [Canny edge detector][41] to find edge of object first.
+
+  ![images][142]
+
+  ```
+  image = np.uint8(image_tofit)
+  edges = cv2.Canny(image, low, high)  # cv2.Canny(image, a, b), reject value < a and detect value > b
+  contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+  ```
+
+  Parameter of high is recommended equal to 3*low.
+
+  **2.Derive moment of contours**
+
+  We can derive the center of mass using [image moment][42].
+
+  ```
+  def get_xy(contour):
+      s = np.array(contour).shape
+      m00 = s[0]
+      [[m10, m01]] = np.sum(contour, axis=0)
+      cX, cY = m10/m00, m01/m00
+      return cX, cY
+  
+  for c in contours:
+    x, y = get_xy(c)
+  ```
+
+  The center of position is (10.5, 11.7) which is close to (10.5, 11.6).
+  
+  Details are shown in TPM/TEST_contours.py.
+
+* **Tracking all aoi with 2D-Gaussian**
+
+  We get more accurate and precise center using two dimension Gaussian
+  fitting.
+
+  ![images][143]
+
+  The center of position is (10.5, 11.6) which is exactly same with (10.5, 11.6).
+
+  Details are shown in TPM/TEST_2Dgauss.py.
+
+
+
+
+
+
+
 
 
 [1]: https://ruder.io/optimizing-gradient-descent/
@@ -481,6 +546,9 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 [7]: https://en.wikipedia.org/wiki/Akaike_information_criterion
 [8]: https://en.wikipedia.org/wiki/Nyquist%E2%80%93Shannon_sampling_theorem
 [31]: https://en.wikipedia.org/wiki/Wiener%E2%80%93Khinchin_theorem
+
+[41]: https://en.wikipedia.org/wiki/Canny_edge_detector
+[42]: https://en.wikipedia.org/wiki/Image_moment
 
 [101]: doc/img/CP/AdaGrad.png
 [102]: doc/img/CP/RSMprop.png
@@ -498,7 +566,6 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 [113]: doc/img/CP/CP_norm_grad.png
 [114]: doc/img/CP/CP_trace_fit.png
 
-
 [121]: doc/img/EM/EM_E-step.png
 [122]: doc/img/EM/EM_M-step.png
 [123]: doc/img/EM/EM_progress.png
@@ -511,3 +578,8 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 [131]: doc/img/FT/demo_signal.png
 [132]: doc/img/FT/ACF.png
 [133]: doc/img/FT/PSD.png
+
+
+[141]: doc/img/ImgAna/bead.png
+[142]: doc/img/ImgAna/edges.png
+[143]: doc/img/ImgAna/2D_Gauss.png
