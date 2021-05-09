@@ -1,7 +1,4 @@
-# -*- coding: utf-8 -*-
 """
-Created on Tue Nov 24 13:29:55 2020
-
 find two point to mininize square error of
 BM before(const.) + one dropping line + BM after(const.)
 loss function is un-differentiable
