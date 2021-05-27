@@ -478,6 +478,73 @@ Demonstration for derive the gradient of loss function by [tensorflow][2].
 Our goals are to localize multiple beads at a time and track all objects
 at each frame.
 
+**API is wrapping as a python class in TPM/BinaryImage.py. as BinaryImage**
+
+* **Load binary data**
+
+  We store each frame with binary file.
+  Therefore, some image information should be known to
+  parse data, e.g. image width, height, datatype and number of frames.
+
+  **1.Read header file**
+
+  All information is stored at header file.
+  If you run in Windows system, GetHeader.dll will be called for 
+  parsing header file.
+  Otherwise, run in Linux system, program will directly parse header.txt.
+  
+  In a word, data recording from old version of Glimpse can only operate
+  on Windows system but from new home-built recorder is not limited
+  by operating system.
+    
+  ```
+  ### methods for getting header information
+  def getheader(self):
+      if platform == 'win32':
+          try:
+              mydll = ctypes.windll.LoadLibrary('./GetHeader.dll')
+          except:
+              mydll = ctypes.windll.LoadLibrary('TPM/GetHeader.dll')
+          GetHeader = mydll.ReadHeader  # function name is ReadHeader
+          # assign variable first (from LabVIEW)
+          # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber,
+          # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (med. fps (Hz)),uint32_t *Element0OfTTB,
+          # int32_t *RegionHeight, int32_t *RegionWidth,
+          # uint32_t *FramesAcquired)
+          # ignore array datatype in header.glimpse
+          GetHeader.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint),
+                                ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_double),
+                                ctypes.POINTER(ctypes.c_uint),
+                                ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+                                ctypes.POINTER(ctypes.c_uint))
+          offset = ctypes.c_int(1)
+          fileNumber = ctypes.c_uint(1)
+          PixelDepth = ctypes.c_uint(1)
+          Element0OfTTB = ctypes.c_uint(1)
+          timeOf1stFrameSecSince1104 = ctypes.c_double(1)
+          RegionHeight = ctypes.c_int(1)
+          RegionWidth = ctypes.c_int(1)
+          FramesAcquired = ctypes.c_uint(1)
+  
+          GetHeader(self.path_header_utf8, offset, fileNumber,
+                    PixelDepth, timeOf1stFrameSecSince1104, Element0OfTTB,
+                    RegionHeight, RegionWidth,
+                    FramesAcquired)  # There are 8 variables.
+          self.header = [FramesAcquired.value, RegionHeight.value, RegionWidth.value,
+                         PixelDepth.value, timeOf1stFrameSecSince1104.value]
+          ## header = [frames, height, width, pixeldepth, med fps]
+          return self.header
+      else:  # is linux or others
+          df = pd.read_csv(self.path_header_txt, sep='\t', header=None)
+          # header_columns = df[0].to_numpy()
+          header_values = df[1].to_numpy()
+          self.header = [int(header_values[0]), int(header_values[2]), int(header_values[1]), int(header_values[4]),
+                         header_values[3]]
+          [self.frames_acquired, self.height, self.width, self.pixeldepth, self.med_fps] = self.header
+          # header = [frames, height, width, pixeldepth, med fps]
+          return self.header
+  ```
+
 * **Objects localization**
 
   We generate a bead at center = (10.5, 11.6).
