@@ -1,4 +1,9 @@
 /venv/
+/venv38/
 /TPM/.idea/
 /.idea
-/TPM/.idea
+/basic/__pycache__/
+/ChangePoint_Finding/__pycache__/
+/EM_Algorithm/__pycache__/
+/OT/__pycache__/
+/TPM/__pycache__/
