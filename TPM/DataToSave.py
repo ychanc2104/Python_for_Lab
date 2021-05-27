@@ -11,7 +11,7 @@ import pandas as pd
 ### Use for data saving and data reshaping
 class DataToSave:
     # data: np.array, path_folder: string path
-    def __init__(self, data, localization_results, path_folder, frame_start, med_fps, window, factor_p2n, BM_lower=10, BM_upper=200, random_string=''):
+    def __init__(self, data, localization_results, path_folder, frame_start, med_fps, window, factor_p2n, BM_lower=30, BM_upper=100, random_string=''):
         self.med_fps = med_fps
         self.BM_lower = BM_lower
         self.BM_upper = BM_upper
@@ -247,7 +247,10 @@ class DataToSave:
     def __get_xy_ratio(self, *args):
         xy_ratio = []
         for data in args:
-            ratio = data[0] / data[1]
+            try:
+                ratio = data[0] / data[1]
+            except:
+                ratio = 0
             ratio[ratio > 99999] = 0
             xy_ratio += [ratio.astype('float32')]
         return xy_ratio

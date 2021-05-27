@@ -133,8 +133,6 @@ class BinaryImage:
     ##  main for getting fit-video of an aoi
     def Get_fitting_video_offline(self, selected_aoi, frame_i, N):
         tracking_results = self.tracking_results
-        # cX = self.cX
-        # cY = self.cY
         cX, cY = self.aoi
         x = self.x_fit
         y = self.y_fit
@@ -156,7 +154,6 @@ class BinaryImage:
             ax.imshow(image_aoi)
 
             ax.contour(x, y, data_fitted.reshape(n_fit, n_fit), 5, colors='r')
-            # ax.contour(x, y, data_fitted.reshape(20, 20), 5)
             plot_img_np = self.get_img_from_fig(fig)
             plot_img_np = cv2.resize(plot_img_np, (1200, 800))
             output_movie.write(plot_img_np)
@@ -174,10 +171,8 @@ class BinaryImage:
         initial_guess_beads = np.array([self.initial_guess] * len(cX))
         data, popt_beads = self.trackbead(image, cX, cY, aoi_size, frame=0, initial_guess_beads=initial_guess_beads)
         amplitude = popt_beads[:, 0]
-        x = popt_beads[:, 3]
-        y = popt_beads[:, 4]
-        self.dx_localization = x - aoi_size/2
-        self.dy_localization = y - aoi_size/2
+        x, y = popt_beads[:, 3], popt_beads[:, 4]
+        self.dx_localization, self.dy_localization = x-aoi_size/2, y-aoi_size/2
         self.initial_guess_beads = initial_guess_beads
         self.amplitude = amplitude
         cX = cX + self.dx_localization
@@ -187,41 +182,24 @@ class BinaryImage:
     ##  tracking position of all beads in a image, get all parameters and frame number
     def trackbead(self, image, cX, cY, aoi_size, frame, initial_guess_beads, IC=False):
         bead_number = len(cX)
-        data = []
         bounds = self.__get_bounds(aoi_size)
-        x = self.x_fit
-        y = self.y_fit
-        # initial_guess_beads = self.initial_guess_beads
-        initial_guess = self.initial_guess
+        x, y = self.x_fit, self.y_fit
+        data = []
         for j in range(bead_number):
             image_tofit, intensity = self.__getAOI(image, cY[j], cX[j], aoi_size)
             initial_guess = self.__get_guess(image_tofit)
-            # x_guess = np.argmax(image_tofit)%aoi_size
-            # y_guess = np.argmax(image_tofit)//aoi_size
-            # initial_guess[3:5] = [x_guess, y_guess]
+
             if IC==True:
                 contrast = 8
                 image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
                 image_tofit = np.array(image_tofit)
-            # if intensity < 3500:
-            #     contrast = 2
-            #     image_tofit = ImageEnhance.Contrast(Image.fromarray(image_tofit.astype('uint8'))).enhance(contrast)
-            #     image_tofit = np.array(image_tofit)
-            ## enhance contrast
-            # image_bead = image[horizontal-10:(horizontal+10), vertical-10:(vertical+10)] # [x,y] = [width, height]
-            # image_bead_bur = cv2.GaussianBlur(image_bead, (5, 5),2,2)
-            ## increase contrast
-            # enh_con = ImageEnhance.Contrast(Image.fromarray(image_bead_bur))
-            # contrast = 10
-            # image_contrasted = enh_con.enhance(contrast)
-            # image_tofit = np.array(image_contrasted)
             try:
                 # popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), initial_guess_beads[j, :],
                 #                            bounds=bounds)
                 popt, pcov = opt.curve_fit(twoD_Gaussian, [x, y], image_tofit.ravel(), initial_guess,
                                            bounds=bounds, method='trf')
                 ss_res = self.__get_residuals(twoD_Gaussian, x, y, image_tofit, popt)
-                # popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
+                ## popt: optimized parameters, pcov: covariance of popt, diagonal terms are variance of parameters
                 # data_fitted = twoD_Gaussian((x, y), *popt)
                 intensity_integral = 2 * math.pi * popt[0] * popt[1] * popt[2]
                 data += [
@@ -258,14 +236,10 @@ class BinaryImage:
     ##  get center point using moment of edge
     def getXY(self, contours):
         cut = self.cut_image_width
-        radius = []
-        radius_save = []
+        radius, radius_save = [], []
         n_contours = len(contours)
-        cX = []
-        cY = []
-        saved_contours = []
-        perimeters = []
-        areas = []
+        cX, cY = [], []
+        saved_contours, perimeters, areas = [], [], []
         for i in range(n_contours):
             c = contours[i]
             perimeters += [cv2.arcLength(c, True)]
@@ -292,16 +266,13 @@ class BinaryImage:
 
     ##  core for selecting points which are not too close
     def select_XY(self, cX, cY, criteria):
-        cX1 = np.array(cX)
-        cY1 = np.array(cY)
+        cX1, cY1 = np.array(cX), np.array(cY)
         n = len(cX1)
-        cX_selected = np.empty(0)
-        cY_selected = np.empty(0)
+        cX_selected, cY_selected = np.empty(0), np.empty(0)
         r_selected = np.empty(0)
         index = []
         for i in range(n):
-            x2 = cX1[i]
-            y2 = cY1[i]
+            x2, y2 = cX1[i], cY1[i]
             r = np.sqrt(x2**2 + y2**2)
             c1 = abs(x2-cX_selected) >= criteria
             c2 = abs(y2-cY_selected) >= criteria
@@ -319,8 +290,7 @@ class BinaryImage:
 
     ## remove beads are too close, choose two image, refer to smaller bead#
     def removeXY(self, cX, cY, criteria):
-        cX1 = np.array(cX)  # len of cXr1 is smaller, as ref
-        cY1 = np.array(cY)
+        cX1, cY1 = np.array(cX), np.array(cY)  # len of cXr1 is smaller, as ref
         i_dele = np.empty(0).astype(int)
         for i in range(len(cX1)):
             dx = cX1 - cX1[i]
@@ -465,7 +435,7 @@ class BinaryImage:
     ## get bounds for curve_fit
     def __get_bounds(self, aoi_size=20):
         ## (amplitude, sigma_x, sigma_y, xo, yo, theta_deg, offset)
-        bounds = ((1, 0.5, 0.5, 0, 0, 0, 0), (255, aoi_size/2, aoi_size/2, aoi_size-1, aoi_size-1, 90, 255))
+        bounds = ((1, 0.5, 0.5, 0, 0, 0, 0), (255, aoi_size/2, aoi_size/2, aoi_size, aoi_size, 90, 255))
         self.bounds = bounds
         return bounds
 
@@ -486,10 +456,10 @@ class BinaryImage:
 
     def __get_guess(self, image_tofit):
         aoi_size = self.aoi_size
-        amp_guess = np.max(image_tofit)
+        background = self.background
+        amp_guess = np.max(image_tofit) - background
         x_guess = np.argmax(image_tofit) % aoi_size
         y_guess = np.argmax(image_tofit) // aoi_size
-        background = self.background
         initial_guess = [amp_guess, 2.5, 2.5, x_guess, y_guess, 0, background]
         return initial_guess
 
@@ -535,12 +505,14 @@ class BinaryImage:
             except:
                 mydll = ctypes.windll.LoadLibrary('TPM/GetHeader.dll')
             GetHeader = mydll.ReadHeader  # function name is ReadHeader
-            # assign variable first (from LabVIEW)
-            # void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber,
-            # uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (med. fps (Hz)),uint32_t *Element0OfTTB,
-            # int32_t *RegionHeight, int32_t *RegionWidth,
-            # uint32_t *FramesAcquired)
-            # ignore array datatype in header.glimpse
+            '''
+            assign variable first (from LabVIEW)
+            void ReadHeader(char String[], int32_t *offset, uint8_t *fileNumber,
+            uint32_t *PixelDepth, double *timeOf1stFrameSecSince1104 (med. fps (Hz)),uint32_t *Element0OfTTB,
+            int32_t *RegionHeight, int32_t *RegionWidth,
+            uint32_t *FramesAcquired)
+            ignore array datatype in header.glimpse
+            '''
             GetHeader.argtypes = (ctypes.c_char_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint),
                                   ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_double),
                                   ctypes.POINTER(ctypes.c_uint),
