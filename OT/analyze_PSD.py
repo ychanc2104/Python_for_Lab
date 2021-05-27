@@ -1,21 +1,20 @@
 from OT.PSD import OT_PSD
 from basic.select import select_file
 from basic.filter import MA
-from basic.binning import binning2
-
 from matplotlib import rcParams
 rcParams["font.family"] = "sans-serif"
 rcParams["font.sans-serif"] = ["Arial"]
 rcParams.update({'font.size': 18})
 import pandas as pd
-
 import numpy as np
 import random
 import math
-import statistics as stat
 import matplotlib.pyplot as plt
-from basic.fitting import linear_eq, L_fit
-from basic.file_io import save_img
+# plt.rc('text', usetex=True)
+# plt.rc('font', **{'family' : 'sans-serif'})
+# plt.rc('font', **{'sans-serif' : 'Arial'})
+# plt.rc('legend', fontsize=18)
+
 
 ##  generate #n uniform RV range from 0 to max
 def get_uRV(max, n):
@@ -57,7 +56,7 @@ def connect_traces(signals):
 
 ### import data
 # path = select_file()
-path = r'/home/hwligroup/Desktop/20210330/YYH_m51_data/time trace/m51 all traces/m51_3.0uM_All.xlsx'
+path = r'C:\Users\pine\Desktop\Data\time trace\m51 all traces\m51_2.0uM_All.xlsx'
 ## x:1.8,
 df = pd.read_excel(path)
 data = np.array(df.dropna(axis='columns', how='all'))
@@ -106,14 +105,16 @@ ax.set_ylabel('Autocorrelation')
 fig, ax = plt.subplots(figsize=(10,8))
 f = np.sort(freq_all_c)
 p = psd_all_c[np.argsort(freq_all_c)]
-# ax.plot(MA(f,100,mode='silding'), MA(p,100,mode='silding'), '.')
-ax.plot(f, p, '-')
+ax.plot(MA(f,15,mode='silding'), MA(p,15,mode='silding'), '-')
+# ax.plot(f, p, '-')
 ax.set_xlim(0, 0.5)
 # ax.set_xlim(0, 100)
-# ax.set_ylim(0.000, 0.1)
+ax.set_ylim(0.000, 5e7)
 ax.set_xlabel('Spatial frequency (1/count)')
 ax.set_ylabel('Power spectral density(a.u.)')
-
+ax.annotate(r'$\frac{1}{7.5}$', xy=(1/7.5, 3e7), xytext=(1/7.5, 5e7),
+            arrowprops=dict(facecolor='black', shrink=0.05)
+            )
 
 
 
