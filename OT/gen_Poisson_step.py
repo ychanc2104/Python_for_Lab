@@ -1,3 +1,5 @@
+import random
+
 from EM_Algorithm.gen_gauss import gen_gauss
 from EM_Algorithm.gen_poisson import gen_poisson
 import numpy as np
@@ -7,6 +9,20 @@ import matplotlib.pyplot as plt
 def gen_Poi_step(stepsize=5, tau=1, n_events=30, noise=4, fs=100):
     step = gen_gauss([stepsize], [0.1], [n_events])
     taus = gen_poisson([tau], [n_events])
+    signal = []
+    counts = 0
+    for i in range(len(step)):
+        signal += [counts] * int(taus[i] * fs)
+        counts += step[i]
+    N = gen_gauss([0], [noise], [len(signal)])
+    signal = np.array(signal) + N
+    return signal
+
+def gen_Poi_2step(stepsize=[5,10], tau=[1,4], n_events=[30,30], noise=1, fs=100):
+    index = np.arange(sum(n_events))
+    random.shuffle(index)
+    step = gen_gauss(stepsize, [0.1,0.1], n_events)[index]
+    taus = gen_poisson(tau, n_events)[index]
     signal = []
     counts = 0
     for i in range(len(step)):
