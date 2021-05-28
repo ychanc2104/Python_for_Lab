@@ -60,10 +60,11 @@ if __name__ == '__main__':
             # labels, data_cluster = EM_gp.predict(step_dwell, function=ln_gau_exp_pdf, paras=para)
 
             ##  plot figure
-            # EM_g.plot_fit_gauss(scatter=False, xlim=[0, 20], save=True, path=f'{c}_gauss.png')
-            # EM_p.plot_fit_exp(xlim=[0, 10], save=True, path=f'{c}_survival.png')
+            EM_g.plot_fit_gauss(scatter=False, xlim=[0, 20], save=True, path=f'{c}_gauss.png', figsize=(7,2))
+            EM_p.plot_fit_exp(xlim=[0, 10], save=True, path=f'{c}_survival.png', figsize=(7,2))
             # EM_gp.plot_gp_contour(xlim=[0, 20], ylim=[0, 10.], save=True, path=f'{c}_2D.png')
             EM_gp.plot_gp_surface()
+            EM_gp.plot_gp_contour_2hist(xlim=[0,20], ylim=[0,10])
             
             all_results += [np.array([f1, m1, s1, tau1, converged_gp]).T]
 

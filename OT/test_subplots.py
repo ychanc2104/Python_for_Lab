@@ -1,4 +1,3 @@
-from basic.binning import binning, scatter_hist
 from EM_Algorithm.gen_gauss import gen_gauss
 from EM_Algorithm.gen_poisson import gen_poisson
 import numpy as np
@@ -6,9 +5,6 @@ import matplotlib.pyplot as plt
 
 x = gen_gauss([8],[2],[1000])
 y = gen_poisson([1],[1000])
-
-pdx, centerx, fig_x, ax_x = binning(x,10,show=False)
-pdy, centery, fig_y, ax_y = binning(y,10,show=False)
 
 fig = plt.figure(figsize=(8, 8))
 
