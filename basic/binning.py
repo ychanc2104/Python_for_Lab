@@ -5,7 +5,8 @@ rcParams.update({'font.size': 18})
 import numpy as np
 import matplotlib.pyplot as plt
 
-def binning(data, bin_number, xlabel='value', ylabel='probability density', show=True, density=True):
+def binning(data, bin_number, xlabel='value', ylabel='probability density',
+            show=True, density=True, figsize=(10,8), color="silver", fontsize=22):
     count, edges = np.histogram(data, bin_number)
     center = []
     edges = list(edges)
@@ -16,10 +17,10 @@ def binning(data, bin_number, xlabel='value', ylabel='probability density', show
         pd = count/sum(count)/binsize
     else:
         pd = count
-    fig, ax = plt.subplots(figsize=(10,8))
-    ax.bar(center, pd, width=binsize, color="silver", edgecolor="white")
-    ax.set_xlabel(f'{xlabel}', fontsize=22)
-    ax.set_ylabel(f'{ylabel}', fontsize=22)
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.bar(center, pd, width=binsize, color=color, edgecolor="white")
+    ax.set_xlabel(f'{xlabel}', fontsize=fontsize)
+    ax.set_ylabel(f'{ylabel}', fontsize=fontsize)
     if show==False:
         plt.close(fig)
     return pd, center, fig, ax

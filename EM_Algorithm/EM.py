@@ -6,7 +6,7 @@ rcParams.update({'font.size': 18})
 # import matplotlib
 # matplotlib.use('Agg')
 from basic.binning import binning
-from basic.math_fn import to_1darray, oneD_gaussian, ln_oneD_gaussian, exp_survival, ln_exp_pdf, ln_gau_exp_pdf
+from basic.math_fn import to_1darray, oneD_gaussian, ln_oneD_gaussian, exp_survival, ln_exp_pdf, ln_gau_exp_pdf, exp_gauss_2d
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -129,7 +129,7 @@ class EM:
         return f_f, m_f, s_f, tau_f, converged
 
 
-    def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False):
+    def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False, figsize=(10,8)):
         self.mode = mode
         ##  find best n_conponents
         data = self.data
@@ -153,22 +153,23 @@ class EM:
             BIC_owns += [self.__BIC()]
             AIC_owns += [self.__AIC()]
             LLE += [self.ln_likelihood]
-        if figure == True:
-            plt.figure()
-            plt.plot(n_clusters, BIC_owns, '--o')
-            plt.xlabel('n_components')
-            plt.ylabel('BIC')
-            plt.figure()
-            plt.plot(n_clusters, AIC_owns, '--o')
-            plt.xlabel('n_components')
-            plt.ylabel('AIC')
 
         BIC_owns, AIC_owns = to_1darray(BIC_owns, AIC_owns)
         ##  get optimal components
         if criteria=='AIC':
             opt_components = n_clusters[np.argmin(AIC_owns[~np.isnan(AIC_owns)])]
+            if figure == True:
+                fig, ax = plt.subplots(figsize=figsize)
+                ax.plot(n_clusters, AIC_owns, '--o')
+                ax.set_xlabel('n_components')
+                ax.set_ylabel('AIC')
         else:
             opt_components = n_clusters[np.argmin(BIC_owns[~np.isnan(BIC_owns)])]
+            if figure == True:
+                fig, ax = plt.subplots(figsize=figsize)
+                ax.plot(n_clusters, BIC_owns, '--o')
+                ax.set_xlabel('n_components')
+                ax.set_ylabel('BIC')
         self.LLE = LLE
         self.BICs = BICs
         self.AICs = AICs
@@ -240,7 +241,7 @@ class EM:
             ax.plot(data_cluster[i][:, 0], data_cluster[i][:, 1], 'o', color=c1, markersize=3)
         for i,fit in enumerate(data_fitted):
             ax.contour(x_mesh, t_mesh, np.exp(fit).reshape(len(x), len(t)), levels=5, cmap=cmaps[i], linewidths=3)
-        ax.set_xlabel('step size (count)', fontsize=22)
+        ax.set_xlabel('step size (numbers)', fontsize=22)
         ax.set_ylabel('dwell time (s)', fontsize=22)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
@@ -248,6 +249,37 @@ class EM:
         plt.show()
         if save == True:
             save_img(fig, path)
+
+
+    def plot_gp_surface(self, x_end=20, t_end=10):
+        data = self.data
+        paras = self.para_final
+
+        x = np.linspace(0, x_end, 100)
+        t = np.linspace(0, t_end, 100)
+        X, Y = np.meshgrid(x, t)
+        Z = exp_gauss_2d(X, Y, *paras)
+
+        fig = plt.figure()
+        ax = plt.axes(projection="3d")
+        ax.plot_wireframe(X, Y, Z, color='green')
+
+        ax = plt.axes(projection='3d')
+        ax.plot_surface(X, Y, Z,
+                        edgecolor='none', alpha=0.3)
+        cset = ax.contour(X, Y, Z, zdir='z', offset=-0.5)
+        cset = ax.contour(X, Y, Z, zdir='x', offset=0, levels=5)
+        cset = ax.contour(X, Y, Z, zdir='y', offset=t_end, levels=3)
+
+        Z_data = exp_gauss_2d(data[:,0], data[:,1], *paras)
+        ax.scatter(data[:,0], data[:,1], -0.5*np.ones(data.shape[0]), c=Z_data, linewidth=1)
+        ax.set_xlabel('step size (numbers)')
+        ax.set_ylabel('dwell time (s)')
+        ax.set_zlabel('probability density')
+        ax.set_xlim(0, x_end)
+        ax.set_ylim(0, t_end)
+        ax.set_zlim(-0.5, 1.5)
+
 
 
     ##  plot the survival function
@@ -271,7 +303,8 @@ class EM:
         return fig
 
     ##  plot data histogram and its gaussian EM (GMM) results
-    def plot_fit_gauss(self, xlim=None, ylim=None, save=False, path='output.png', scatter=False):
+    def plot_fit_gauss(self, xlim=None, ylim=None, save=False, path='output.png', scatter=False,
+                       figsize=(10,8), color="grey", fontsize=22):
         data = self.data
         para = self.para_final
         labels, data_cluster = self.predict(data, ln_oneD_gaussian, paras=para)
@@ -280,15 +313,15 @@ class EM:
         y_fit = oneD_gaussian(x, args=para)
 
         if scatter==False:
-            bin_number = np.log2(len(data)).astype('int') + 3
-            pd, center, fig, ax = binning(data, bin_number)  # plot histogram
+            bin_number = np.log2(len(data)).astype('int')
+            pd, center, fig, ax = binning(data, bin_number, figsize=figsize, color=color, fontsize=fontsize)  # plot histogram
             for i in range(n_components):
                 ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
             ax.plot(x, sum(y_fit), 'r-')
-            ax.set_xlabel('step size (count)', fontsize=22)
-            ax.set_ylabel('probability density (1/$\mathregular{count}$)', fontsize=22)
+            ax.set_xlabel('step size (count)', fontsize=fontsize)
+            ax.set_ylabel('probability density (1/$\mathregular{count}$)', fontsize=fontsize)
         else:
-            bin_number = np.log2(len(data)).astype('int') + 3
+            bin_number = np.log2(len(data)).astype('int')
             pd, center, fig, ax = binning(data, bin_number)  # plot histogram
             for i in range(n_components):
                 ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])

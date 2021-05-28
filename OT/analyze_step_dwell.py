@@ -19,9 +19,9 @@ if __name__ == '__main__':
     # conc = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]  ## S5S1
     # conc = [1.0, 1.2, 1.5, 1.8, 2.0, 3.0, 4.0] ## m51 only
     conc = ['0.10', '0.20', '0.25', '0.50', '0.70', '0.80', '1.10', '1.20', '2.00']  ## EcRecA
-    # conc = ['2.00']
+    conc = ['3.0']
     # path_folder = select_folder()
-    path_folder = '/home/hwligroup/Desktop/20210330/YYH_m51_data/step-dwell time/EcRecA'
+    path_folder = r'/home/hwligroup/Desktop/Data/step-dwell time/m51'
 
     for i in range(1):
 
@@ -54,15 +54,16 @@ if __name__ == '__main__':
             ##  2D clustering
             step_dwell = np.array([step, dwell]).T
             EM_gp = EM(step_dwell, dim=2)
-            opt_components = EM_gp.opt_components(tolerance=1e-2, mode='GPEM', criteria='BIC')
+            opt_components = EM_gp.opt_components(tolerance=1e-2, mode='GPEM', criteria='BIC', figure=False)
             f1, m1, s1, tau1, converged_gp = EM_gp.GPEM(n_components=opt_components, tolerance=1e-2, rand_init=True)
             # para = [f1[-1].ravel(), m1[-1].ravel(), s1[-1].ravel(), f2[-1].ravel(), tau1[-1].ravel()]
             # labels, data_cluster = EM_gp.predict(step_dwell, function=ln_gau_exp_pdf, paras=para)
 
             ##  plot figure
-            # EM_g.plot_fit_gauss(scatter=True, xlim=[0, 20], save=True, path=f'{c}_gauss.png')
-            EM_p.plot_fit_exp(xlim=[0, 15], save=True, path=f'{c}_survival.png')
-            # EM_gp.plot_gp_contour(xlim=[0, 20], ylim=[0, 20], save=True, path=f'{c}_2D.png')
+            # EM_g.plot_fit_gauss(scatter=False, xlim=[0, 20], save=True, path=f'{c}_gauss.png')
+            # EM_p.plot_fit_exp(xlim=[0, 10], save=True, path=f'{c}_survival.png')
+            # EM_gp.plot_gp_contour(xlim=[0, 20], ylim=[0, 10.], save=True, path=f'{c}_2D.png')
+            EM_gp.plot_gp_surface()
             
             all_results += [np.array([f1, m1, s1, tau1, converged_gp]).T]
 
