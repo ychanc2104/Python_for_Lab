@@ -94,3 +94,7 @@ def ln_gau_exp_pdf(data, args):
     for i in range(f.size):
         lny[i, :] = np.log(f[i]) + ln_gauss(x, xm[i], s[i]) + ln_exp_dist(t, tau[i])
     return lny
+
+def exp_gauss_2d(x, t, f, m, sigma, tau):
+    g = f*np.exp(-t/tau)*sigma/np.sqrt(2*math.pi)*np.exp(-(x-m)**2/(2*sigma**2))
+    return g
