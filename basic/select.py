@@ -26,8 +26,9 @@ def get_files(regex_filename, dialog=True, path_folder=''):
     path_data = glob(os.path.join(path_folder, regex_filename))
     return path_data
 
-def get_mat():
-    path_file = select_file()
+def get_mat(path_file=None):
+    if path_file == None:
+        path_file = select_file()
     data = sio.loadmat(path_file)
     return data
 

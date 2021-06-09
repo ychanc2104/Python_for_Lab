@@ -131,7 +131,7 @@ class EM:
         return f_f, m_f, s_f, tau_f, converged
 
 
-    def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False, figsize=(10,8)):
+    def opt_components(self, tolerance=1e-2, mode='GMM', criteria='BIC', figure=False, figsize=(10,10)):
         self.mode = mode
         ##  find best n_conponents
         data = self.data
@@ -224,7 +224,7 @@ class EM:
         return fig
 
     ##  plot Gaussian-Poisson contour plot
-    def plot_gp_contour(self, xlim=None, ylim=None, save=False, path='output.png'):
+    def plot_gp_contour(self, xlim=None, ylim=None, save=False, path='output.png', xlabel='step size (count)', ylabel='dwell time (s)'):
         data = self.data
         paras = self.para_final
         labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=paras)
@@ -243,8 +243,8 @@ class EM:
             ax.plot(data_cluster[i][:, 0], data_cluster[i][:, 1], 'o', color=c1, markersize=3)
         for i,fit in enumerate(data_fitted):
             ax.contour(x_mesh, t_mesh, np.exp(fit).reshape(len(x), len(t)), levels=5, cmap=cmaps[i], linewidths=3)
-        ax.set_xlabel('step size (count)', fontsize=22)
-        ax.set_ylabel('dwell time (s)', fontsize=22)
+        ax.set_xlabel(xlabel, fontsize=22)
+        ax.set_ylabel(ylabel, fontsize=22)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         plt.tight_layout()
@@ -303,7 +303,7 @@ class EM:
         plt.show
 
 
-    def plot_gp_surface(self, x_end=20, t_end=10):
+    def plot_gp_surface(self, x_end=20, t_end=10, xlabel='step size (count)', ylabel='dwell time (s)', zlabel='probability density'):
         data = self.data
         paras = self.para_final
 
@@ -325,9 +325,9 @@ class EM:
 
         Z_data = exp_gauss_2d(data[:,0], data[:,1], *paras)
         ax.scatter(data[:,0], data[:,1], -0.5*np.ones(data.shape[0]), c=Z_data, linewidth=1)
-        ax.set_xlabel('step size (count)')
-        ax.set_ylabel('dwell time (s)')
-        ax.set_zlabel('probability density')
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_zlabel(zlabel)
         ax.set_xlim(0, x_end)
         ax.set_ylim(0, t_end)
         ax.set_zlim(-0.5, 1.5)
@@ -337,7 +337,7 @@ class EM:
 
 
     ##  plot the survival function
-    def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png', figsize=(10,8)):
+    def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png', xlabel='dwell time (s)', ylabel='survival'):
         data = self.data
         para = self.para_final
         n_components = self.n_components
@@ -347,8 +347,8 @@ class EM:
         for i in range(n_components):
             ax.plot(x, y_fit[i, :], '-')
         ax.plot(x, sum(y_fit), 'r--')
-        ax.set_xlabel('dwell time (s)', fontsize=22)
-        ax.set_ylabel('survival', fontsize=22)
+        ax.set_xlabel(xlabel, fontsize=22)
+        ax.set_ylabel(ylabel, fontsize=22)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         plt.show()
@@ -358,7 +358,7 @@ class EM:
 
     ##  plot data histogram and its gaussian EM (GMM) results
     def plot_fit_gauss(self, xlim=None, ylim=None, save=False, path='output.png', scatter=False,
-                       figsize=(10,8), color="grey", fontsize=22):
+                       figsize=(10,8), color="grey", fontsize=22, xlabel='step size (count)', ylabel='probability density (1/$\mathregular{count}$)'):
         data = self.data
         para = self.para_final
         labels, data_cluster = self.predict(data, ln_oneD_gaussian, paras=para)
@@ -372,18 +372,18 @@ class EM:
             for i in range(n_components):
                 ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
             ax.plot(x, sum(y_fit), 'r-')
-            ax.set_xlabel('step size (count)', fontsize=fontsize)
-            ax.set_ylabel('probability density (1/$\mathregular{count}$)', fontsize=fontsize)
+
         else:
             bin_number = np.log2(len(data)).astype('int')
             pd, center, fig, ax = binning(data, bin_number)  # plot histogram
             for i in range(n_components):
                 ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
             ax.plot(x, sum(y_fit), 'r--')
-            ax.set_xlabel('step size (count)', fontsize=22)
-            ax.set_ylabel('probability density (1/$\mathregular{count}$)', fontsize=22)
+
             for i,x in enumerate(data_cluster):
                 ax.plot(x, np.zeros(len(x)), 'o', markersize=5, color=self.__colors_order()[i])
+        ax.set_xlabel(xlabel, fontsize=fontsize)
+        ax.set_ylabel(ylabel, fontsize=fontsize)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
         plt.show()
