@@ -5,11 +5,13 @@ rcParams["font.sans-serif"] = ["Arial"]
 rcParams.update({'font.size': 18})
 # import matplotlib
 # matplotlib.use('Agg')
-from basic.binning import binning
+from basic.binning import binning, scatter_hist
 from basic.math_fn import to_1darray, oneD_gaussian, ln_oneD_gaussian, exp_survival, ln_exp_pdf, ln_gau_exp_pdf, exp_gauss_2d
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+
 from sklearn.cluster import KMeans
 from sklearn.mixture import GaussianMixture
 from basic.file_io import save_img
@@ -129,7 +131,7 @@ class EM:
         return f_f, m_f, s_f, tau_f, converged
 
 
-    def opt_components(self, tolerance=1e-2, mode='GMM', criteria='AIC', figure=False, figsize=(10,8)):
+    def opt_components(self, tolerance=1e-2, mode='GMM', criteria='BIC', figure=False, figsize=(10,10)):
         self.mode = mode
         ##  find best n_conponents
         data = self.data
@@ -251,6 +253,56 @@ class EM:
             save_img(fig, path)
 
 
+    def plot_gp_contour_2hist(self, xlim=None, ylim=None, figsize=(10,10), bins_x=10, bins_y=10):
+        data = self.data
+        paras = self.para_final
+        labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=paras)
+
+        x = np.linspace(min(data[:,0]), max(data[:,0]), 100)
+        t = np.linspace(min(data[:,1]), max(data[:,1]), 100)
+        x_mesh, t_mesh = np.meshgrid(x, t)
+        x_t = np.array([x_mesh.ravel(), t_mesh.ravel()]).T
+        data_fitted = ln_gau_exp_pdf(x_t, args=paras)
+        # start with a square Figure
+        fig = plt.figure(figsize=figsize)
+
+        # Add a gridspec with two rows and two columns and a ratio of 2 to 7 between
+        # the size of the marginal axes and the main axes in both directions.
+        # Also adjust the subplot parameters for a square plot.
+        gs = fig.add_gridspec(2, 2, width_ratios=(7, 2), height_ratios=(2, 7),
+                              left=0.1, right=0.9, bottom=0.1, top=0.9,
+                              wspace=0.05, hspace=0.05)
+
+        ax = fig.add_subplot(gs[1, 0])
+        # the scatter plot:
+        colors = ['green', 'royalblue', 'sienna', 'magenta', 'darkgreen', 'darkslateblue', 'maroon', 'black']
+        cmaps = ['Greens', 'Blues', 'Reds', 'Purples', 'summer',  'copper']
+        for i,fit in enumerate(data_fitted):
+            c1 = self.__colors_order()[i]
+            ax.plot(data_cluster[i][:, 0], data_cluster[i][:, 1], 'o', color=c1, markersize=3)
+        for i,fit in enumerate(data_fitted):
+            ax.contour(x_mesh, t_mesh, np.exp(fit).reshape(len(x), len(t)), levels=5, cmap=cmaps[i], linewidths=3)
+        ax.set_xlabel('step size (count)', fontsize=22)
+        ax.set_ylabel('dwell time (s)', fontsize=22)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
+
+        # ax.scatter(x, y)
+        ax_histx = fig.add_subplot(gs[0, 0], sharex=ax)
+        ax_histx.hist(data[:,0], bins=bins_x, color='grey', edgecolor="white", density=True)
+        ax_histy = fig.add_subplot(gs[1, 1], sharey=ax)
+
+        data_series = pd.Series(data[:,1].ravel())
+        E = pd.Series(np.ones(len(data[:,1]))) ## 1 = death
+        kmf = KaplanMeierFitter()
+        kmf.fit(data_series, event_observed=E)
+        kmf.plot_survival_function()
+        ax_histy.get_legend().remove() ## remove legend
+
+        # ax_histy.hist(data[:,1], bins=bins_y, orientation='horizontal', color='grey', edgecolor="white")
+        plt.show
+
+
     def plot_gp_surface(self, x_end=20, t_end=10, xlabel='step size (count)', ylabel='dwell time (s)', zlabel='probability density'):
         data = self.data
         paras = self.para_final
@@ -260,7 +312,7 @@ class EM:
         X, Y = np.meshgrid(x, t)
         Z = exp_gauss_2d(X, Y, *paras)
 
-        fig = plt.figure()
+        fig = plt.figure(figsize=(10,8))
         ax = plt.axes(projection="3d")
         ax.plot_wireframe(X, Y, Z, color='green')
 
@@ -268,8 +320,8 @@ class EM:
         ax.plot_surface(X, Y, Z,
                         edgecolor='none', alpha=0.3)
         cset = ax.contour(X, Y, Z, zdir='z', offset=-0.5)
-        cset = ax.contour(X, Y, Z, zdir='x', offset=0, levels=5)
-        cset = ax.contour(X, Y, Z, zdir='y', offset=t_end, levels=3)
+        cset = ax.contour(X, Y, Z, zdir='x', offset=0, levels=1)
+        cset = ax.contour(X, Y, Z, zdir='y', offset=t_end, levels=1)
 
         Z_data = exp_gauss_2d(data[:,0], data[:,1], *paras)
         ax.scatter(data[:,0], data[:,1], -0.5*np.ones(data.shape[0]), c=Z_data, linewidth=1)
@@ -279,7 +331,9 @@ class EM:
         ax.set_xlim(0, x_end)
         ax.set_ylim(0, t_end)
         ax.set_zlim(-0.5, 1.5)
-
+        ax.xaxis.set_major_locator(MaxNLocator(5))
+        ax.yaxis.set_major_locator(MaxNLocator(5))
+        ax.zaxis.set_major_locator(MaxNLocator(4))
 
 
     ##  plot the survival function
@@ -287,7 +341,7 @@ class EM:
         data = self.data
         para = self.para_final
         n_components = self.n_components
-        fig, ax = self.__plot_survival(data)
+        fig, ax = self.__plot_survival(data, figsize)
         x = np.arange(0.01, max(data) + 3*np.std(data), 0.01)
         y_fit = exp_survival(x, args=para)
         for i in range(n_components):
@@ -300,7 +354,7 @@ class EM:
         plt.show()
         if save == True:
             save_img(fig, path)
-        return fig
+        return fig, ax
 
     ##  plot data histogram and its gaussian EM (GMM) results
     def plot_fit_gauss(self, xlim=None, ylim=None, save=False, path='output.png', scatter=False,
@@ -338,12 +392,12 @@ class EM:
         return fig
 
     ##  plot Kaplan_Meier method
-    def __plot_survival(self, data):
+    def __plot_survival(self, data, figsize=(10,8)):
         data_series = pd.Series(data.ravel())
         E = pd.Series(np.ones(len(data))) ## 1 = death
         kmf = KaplanMeierFitter()
         kmf.fit(data_series, event_observed=E)
-        fig, ax = plt.subplots(figsize=(10,8))
+        fig, ax = plt.subplots(figsize=figsize)
         kmf.plot_survival_function()
         ax.get_legend().remove() ## remove legend
         plt.show()
