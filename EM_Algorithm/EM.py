@@ -57,8 +57,8 @@ class EM:
 
         """
         ## (f,m,s) are growing array
-        self.n_components = n_components
         data = self.data
+        self.n_components = n_components
         self.tolerance = tolerance
         ##  initialize EM parameters
         f, m, s, loop, improvement = self.__init_GMM(data, n_components=n_components, rand_init=rand_init)
@@ -81,8 +81,8 @@ class EM:
         return f_f, m_f, s_f, converged
 
     def PEM(self, n_components, tolerance=1e-2, rand_init=False):
-        self.n_components = n_components
         data = self.data
+        self.n_components = n_components
         self.tolerance = tolerance
         f, tau, s, loop, improvement = self.__init_PEM(data, n_components=n_components, rand_init=rand_init)
         converged = improvement < tolerance
@@ -97,11 +97,11 @@ class EM:
         tau_f, f_f, s_f = self.__sort_according(tau[-1], f[-1], s[-1])
         self.para_final = [f_f, tau_f]
         para = self.para_final
-        self.__cal_LLE(data, function=ln_exp_pdf, para=para)
+        ln_likelihood = self.__cal_LLE(data, function=ln_exp_pdf, para=para)
         converged = np.array([converged] * n_components)
         self.converged = converged
         # labels, data_cluster = self.predict(data, ln_exp_pdf, paras=[f.ravel(), tau.ravel()])
-        return f_f, tau_f, s_f, converged
+        return f_f, tau_f, s_f, converged, ln_likelihood
 
     def GPEM(self, n_components, tolerance=1e-2, rand_init=False):
         data = self.data ## (n_samples, 2)
@@ -130,15 +130,27 @@ class EM:
         # labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=para)
         return f_f, m_f, s_f, tau_f, converged
 
+    ##  iteratively find lowest BIC or AIC value
+    def opt_components_iter(self, iteration=10, tolerance=1e-2, mode='GMM', criteria='BIC', figure=False, figsize=(10, 10)):
+        n_all, c_all = [], []
+        for i in range(iteration):
+            n = self.opt_components(tolerance=tolerance, mode=mode, criteria=criteria, figure=figure, figsize=figsize)
+            if criteria == 'AIC':
+                c = self.AIC_owns[n - 1]
+            else:
+                c = self.BIC_owns[n - 1]
+            n_all = np.append(n_all, n)
+            c_all = np.append(c_all, c)
+        index = np.argmin(c_all)
+        return int(n_all[index])
+
 
     def opt_components(self, tolerance=1e-2, mode='GMM', criteria='BIC', figure=False, figsize=(10,10)):
         self.mode = mode
         ##  find best n_conponents
         data = self.data
-        BICs = []
-        AICs = []
-        BIC_owns = []
-        AIC_owns = []
+        BICs, AICs = [], []
+        BIC_owns, AIC_owns = [], []
         LLE = []
         n_clusters = np.arange(1, 6)
         for c in n_clusters:
@@ -178,7 +190,6 @@ class EM:
         self.BIC_owns = BIC_owns
         self.AIC_owns = AIC_owns
         return opt_components
-
 
     ##  get predicted data_cluster and its log-likelihood
     def predict(self, data, function, paras):
@@ -337,7 +348,7 @@ class EM:
 
 
     ##  plot the survival function
-    def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png', xlabel='dwell time (s)', ylabel='survival'):
+    def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png', xlabel='dwell time (s)', ylabel='survival', figsize=(10,10)):
         data = self.data
         para = self.para_final
         n_components = self.n_components
