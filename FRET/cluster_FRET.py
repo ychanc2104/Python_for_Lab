@@ -8,8 +8,8 @@ import os
 
 
 def gen_random_code(n):
-    digits = "".join([random.choice(string.digits) for i in range(n)])
-    chars = "".join([random.choice(string.ascii_letters) for i in range(n)])
+    digits = "".join([random.choice(string.digits) for _ in range(n)])
+    chars = "".join([random.choice(string.ascii_letters) for _ in range(n)])
     return digits + chars
 
 def reshape_results(*args):
@@ -33,6 +33,8 @@ def get_col(name,n):
     return output
 
 
+
+n_component = 1 ## if None, auto-find n
 all_path = get_files('*.mat')
 
 for path in all_path:
@@ -51,7 +53,7 @@ for path in all_path:
         dwell_on = dwell[m_shape-i, m_shape-i-1]
         dwell_off = dwell[m_shape-i-1, m_shape-i]
         ## EM
-        EM_p_on, f_tau_on, tau_i_on, s_tau_on, converged_p_on, ln_likelihood_on = get_params(dwell_on)
+        EM_p_on, f_tau_on, tau_i_on, s_tau_on, converged_p_on, ln_likelihood_on = get_params(dwell_on, n_component)
         EM_p_off, f_tau_off, tau_i_off, s_tau_off, converged_p_off, ln_likelihood_off = get_params(dwell_off)
         ## store results
         EM_on, EM_off, f_on, f_off, tau_on, tau_off, LLE_on, LLE_off = collect_params([EM_on, EM_p_on],
