@@ -20,7 +20,7 @@ class VA:
         t_end = self.t_end
         varX, semX, xm = [], [], []
         ### calculate variance
-        t = np.arange(0.05, (t_end - 0.05) / 2, 10/fs)
+        t = np.arange(0.05, (t_end - 0.05) / 2, 2/fs)
         for ti in t:
             n_interval = int(np.floor(ti * fs))  ## time diff for calculating variance
             n_row = int(np.floor(len(signal) / n_interval))  ##
@@ -34,10 +34,10 @@ class VA:
         return t, varX, semX
 
 
-stepsize = np.array([5, 5])
-tau = np.array([1, 1])
+stepsize = np.array([5, 10])
+tau = np.array([1, 2])
 fs = 100 ## Sampling frequency (Hz)
-n_events = [100,100]
+n_events = np.array([100,200])
 noise = 1
 
 signal_connect = gen_Poi_2step(stepsize=stepsize, tau=tau, n_events=n_events, noise=noise, fs=fs)
@@ -48,13 +48,14 @@ ax.set_xlabel('Time (s)', fontsize=22)
 ax.set_ylabel('Signal (a.u.)', fontsize=22)
 
 
-VA_test = VA(signal_connect, fs, t_end=10)
+VA_test = VA(signal_connect, fs, t_end=2)
 time, varX, semX = VA_test.analyze()
 slope, intercept = L_fit(time, varX)
-slope_e = np.sum(stepsize**2/tau)
+slope_e = np.sum(stepsize**2/tau*n_events/sum(n_events))
 
-fig, ax = plt.subplots(figsize=(10,8))
+fig, ax = plt.subplots(figsize=(10,10))
 ax.errorbar(time, varX, yerr=semX, color='dodgerblue', marker='o', ls='--', capsize=5, capthick=1, ecolor='black')
-ax.plot(time, linear_eq(time, 25, 1), 'r--')
+ax.plot(time, linear_eq(time, slope_e, 2), 'r--')
+
 ax.set_xlabel('Time (s)', fontsize=22)
 ax.set_ylabel('Variance ($\mathregular{count^2}$)', fontsize=22)

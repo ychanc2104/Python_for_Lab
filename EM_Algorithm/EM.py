@@ -124,11 +124,11 @@ class EM:
         m_f, f_f, s_f, tau_f = self.__sort_according(m[-1], f1[-1], s1[-1], tau[-1])
         self.para_final = [f_f, m_f, s_f, tau_f]
         para = self.para_final
-        self.__cal_LLE(data, function=ln_gau_exp_pdf, para=para)
+        ln_likelihood = self.__cal_LLE(data, function=ln_gau_exp_pdf, para=para)
         converged = np.array([converged] * n_components)
         self.converged = converged
         # labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=para)
-        return f_f, m_f, s_f, tau_f, converged
+        return f_f, m_f, s_f, tau_f, converged, ln_likelihood
 
     ##  iteratively find lowest BIC or AIC value
     def opt_components_iter(self, iteration=10, tolerance=1e-2, mode='GMM', criteria='BIC', figure=False, figsize=(10, 10)):

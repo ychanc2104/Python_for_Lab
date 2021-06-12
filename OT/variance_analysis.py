@@ -114,9 +114,11 @@ xm_1_fit = xm_1[0:points_tofit]
 
 ## parameters for fitting average of all time-variance traces
 slope_1, intercept_1 = L_fit(t_fit, varX_1_fit)
-fig, ax = plt.subplots(figsize=(10,8))
+fig, ax = plt.subplots(figsize=(10,10))
 ax.errorbar(t, varX_1, yerr=semX_1, color='dodgerblue', marker='o', ls='--', capsize=5, capthick=1, ecolor='black')
-ax.plot(t, linear_eq(t, slope_1, intercept_1), 'r--')
+# ax.plot(t, linear_eq(t, slope_1, intercept_1), 'r--')
+ax.plot(t, linear_eq(t, 19.659, intercept_1), 'r--')
+
 ax.set_xlabel('Time (s)', fontsize=22)
 ax.set_ylabel('Variance ($\mathregular{count^2}$)', fontsize=22)
 save_img(fig, 'VA_2.0.png')

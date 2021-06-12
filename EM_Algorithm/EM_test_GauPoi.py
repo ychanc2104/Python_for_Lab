@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     data = np.array([data_g, data_p]).T
     EM_gp = EM(data, dim=2)
-    opt_components = EM_gp.opt_components(tolerance=1e-2, mode='GPEM')
+    opt_components = EM_gp.opt_components_iter(tolerance=1e-2, mode='GPEM')
     f1, m, s1, tau, converged = EM_gp.GPEM(opt_components, tolerance=1e-2, rand_init=False)
 
     EM_gp.plot_gp_contour(xlim=[0, 20], ylim=[0, 10.])

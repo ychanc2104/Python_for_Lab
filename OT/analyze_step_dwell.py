@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # conc = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]  ## S5S1
     # conc = [1.0, 1.2, 1.5, 1.8, 2.0, 3.0, 4.0] ## m51 only
     conc = ['0.10', '0.20', '0.25', '0.50', '0.70', '0.80', '1.10', '1.20', '2.00']  ## EcRecA
-    conc = ['0.5']
+    conc = ['2.0']
     # path_folder = select_folder()
     # path_folder = r'/home/hwligroup/Desktop/Data/step-dwell time/m51'
     path_folder = r'C:\Users\pine\Desktop\Data\step-dwell time\m51 + mSS'
@@ -54,7 +54,7 @@ if __name__ == '__main__':
             step_dwell = np.array([step, dwell]).T
             EM_gp = EM(step_dwell, dim=2)
             opt_components = EM_gp.opt_components_iter(tolerance=1e-2, mode='GPEM', criteria='BIC', figure=False)
-            f1, m1, s1, tau1, converged_gp = EM_gp.GPEM(n_components=opt_components, tolerance=1e-2, rand_init=True)
+            f1, m1, s1, tau1, converged_gp, LLE_gp = EM_gp.GPEM(n_components=opt_components, tolerance=1e-2, rand_init=True)
 
             ##  plot figure
             EM_g.plot_fit_gauss(scatter=False, xlim=[0, 20], save=False, path=f'{c}_gauss.png', figsize=(7,2))
@@ -67,5 +67,5 @@ if __name__ == '__main__':
             # EM_gp.plot_gp_surface()
             EM_gp.plot_gp_contour_2hist(xlim=[0,20], ylim=[0,10])
             
-            all_results += [np.array([f1, m1, s1, tau1, converged_gp]).T]
+            all_results += [np.array([f1, m1, s1, tau1, converged_gp, LLE_gp]).T]
 
