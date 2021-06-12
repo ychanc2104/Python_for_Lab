@@ -19,9 +19,10 @@ if __name__ == '__main__':
     # conc = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]  ## S5S1
     # conc = [1.0, 1.2, 1.5, 1.8, 2.0, 3.0, 4.0] ## m51 only
     conc = ['0.10', '0.20', '0.25', '0.50', '0.70', '0.80', '1.10', '1.20', '2.00']  ## EcRecA
-    conc = ['3.0']
+    conc = ['0.5']
     # path_folder = select_folder()
-    path_folder = r'/home/hwligroup/Desktop/Data/step-dwell time/m51'
+    # path_folder = r'/home/hwligroup/Desktop/Data/step-dwell time/m51'
+    path_folder = r'C:\Users\pine\Desktop\Data\step-dwell time\m51 + mSS'
 
     for i in range(1):
 
@@ -39,31 +40,31 @@ if __name__ == '__main__':
     
             ## get Gaussian EM results
             EM_g = EM(step)
-            n_components_g = EM_g.opt_components(tolerance=1e-2, mode='GMM', criteria='BIC', figure=False)
+            n_components_g = EM_g.opt_components_iter(tolerance=1e-2, mode='GMM', criteria='BIC', figure=False)
             f, m, s, converged_g = EM_g.GMM(n_components_g, rand_init=True, tolerance=1e-2)
-
             all_gauss += [np.array([f, m, s, converged_g]).T]
     
             ## get poisson EM results
             EM_p = EM(dwell)
-            n_components_p = EM_p.opt_components(tolerance=1e-2, mode='PEM', criteria='BIC', figure=False)
-            f_tau, tau, s_tau, converged_p = EM_p.PEM(n_components_p)
-
+            n_components_p = EM_p.opt_components_iter(tolerance=1e-2, mode='PEM', criteria='BIC', figure=False)
+            f_tau, tau, s_tau, converged_p, LLE = EM_p.PEM(n_components_p)
             all_survival += [np.array([f_tau, tau, converged_p]).T]
 
             ##  2D clustering
             step_dwell = np.array([step, dwell]).T
             EM_gp = EM(step_dwell, dim=2)
-            opt_components = EM_gp.opt_components(tolerance=1e-2, mode='GPEM', criteria='BIC', figure=False)
+            opt_components = EM_gp.opt_components_iter(tolerance=1e-2, mode='GPEM', criteria='BIC', figure=False)
             f1, m1, s1, tau1, converged_gp = EM_gp.GPEM(n_components=opt_components, tolerance=1e-2, rand_init=True)
-            # para = [f1[-1].ravel(), m1[-1].ravel(), s1[-1].ravel(), f2[-1].ravel(), tau1[-1].ravel()]
-            # labels, data_cluster = EM_gp.predict(step_dwell, function=ln_gau_exp_pdf, paras=para)
 
             ##  plot figure
-            EM_g.plot_fit_gauss(scatter=False, xlim=[0, 20], save=True, path=f'{c}_gauss.png', figsize=(7,2))
-            EM_p.plot_fit_exp(xlim=[0, 10], save=True, path=f'{c}_survival.png', figsize=(7,2))
+            EM_g.plot_fit_gauss(scatter=False, xlim=[0, 20], save=False, path=f'{c}_gauss.png', figsize=(7,2))
+            EM_p.plot_fit_exp(xlim=[0, 10], save=False, path=f'{c}_survival.png', figsize=(7,2))
+            para = EM_gp.para_final
+            EM_p.plot_fit_exp(xlim=[0, 10], save=False, path=f'{c}_survival.png', figsize=(7,2),
+                              para=[para[0]]+[para[3]])
+
             # EM_gp.plot_gp_contour(xlim=[0, 20], ylim=[0, 10.], save=True, path=f'{c}_2D.png')
-            EM_gp.plot_gp_surface()
+            # EM_gp.plot_gp_surface()
             EM_gp.plot_gp_contour_2hist(xlim=[0,20], ylim=[0,10])
             
             all_results += [np.array([f1, m1, s1, tau1, converged_gp]).T]

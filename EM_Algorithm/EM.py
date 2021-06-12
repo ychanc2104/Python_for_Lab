@@ -298,16 +298,27 @@ class EM:
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
 
-        # ax.scatter(x, y)
+        ## gaussian plot
         ax_histx = fig.add_subplot(gs[0, 0], sharex=ax)
         ax_histx.hist(data[:,0], bins=bins_x, color='grey', edgecolor="white", density=True)
-        ax_histy = fig.add_subplot(gs[1, 1], sharey=ax)
+        y_fit = oneD_gaussian(x, args=paras[:3])
+        for i in range(len(paras[0])):
+            ax_histx.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
+        ax_histx.plot(x, sum(y_fit), 'r-')
 
+        ## survival plot
+        ax_histy = fig.add_subplot(gs[1, 1], sharey=ax)
         data_series = pd.Series(data[:,1].ravel())
         E = pd.Series(np.ones(len(data[:,1]))) ## 1 = death
         kmf = KaplanMeierFitter()
         kmf.fit(data_series, event_observed=E)
-        kmf.plot_survival_function()
+        kmf.plot_survival_function(ax=ax_histy)
+
+        y_fit = exp_survival(x, args=[paras[0]]+[paras[3]])
+        for i in range(len(paras[0])):
+            ax_histy.plot(y_fit[i, :], x, '-', color=self.__colors_order()[i])
+        ax_histy.plot(sum(y_fit), x, 'r--')
+
         ax_histy.get_legend().remove() ## remove legend
 
         # ax_histy.hist(data[:,1], bins=bins_y, orientation='horizontal', color='grey', edgecolor="white")
@@ -348,15 +359,18 @@ class EM:
 
 
     ##  plot the survival function
-    def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png', xlabel='dwell time (s)', ylabel='survival', figsize=(10,10)):
+    def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png',
+                     xlabel='dwell time (s)', ylabel='survival', figsize=(10,10),
+                     para=None):
         data = self.data
-        para = self.para_final
+        if para == None:
+            para = self.para_final
         n_components = self.n_components
         fig, ax = self.__plot_survival(data, figsize)
         x = np.arange(0.01, max(data) + 3*np.std(data), 0.01)
         y_fit = exp_survival(x, args=para)
-        for i in range(n_components):
-            ax.plot(x, y_fit[i, :], '-')
+        for i in range(len(para[0])):
+            ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
         ax.plot(x, sum(y_fit), 'r--')
         ax.set_xlabel(xlabel, fontsize=22)
         ax.set_ylabel(ylabel, fontsize=22)
@@ -369,9 +383,11 @@ class EM:
 
     ##  plot data histogram and its gaussian EM (GMM) results
     def plot_fit_gauss(self, xlim=None, ylim=None, save=False, path='output.png', scatter=False,
-                       figsize=(10,8), color="grey", fontsize=22, xlabel='step size (count)', ylabel='probability density (1/$\mathregular{count}$)'):
+                       figsize=(10,8), color="grey", fontsize=22, xlabel='step size (count)',
+                       ylabel='probability density (1/$\mathregular{count}$)', para=None):
         data = self.data
-        para = self.para_final
+        if para == None:
+            para = self.para_final
         labels, data_cluster = self.predict(data, ln_oneD_gaussian, paras=para)
         n_components = self.n_components
         x = np.arange(0, max(data) + np.std(data), 0.001)
@@ -380,7 +396,7 @@ class EM:
         if scatter==False:
             bin_number = np.log2(len(data)).astype('int')
             pd, center, fig, ax = binning(data, bin_number, figsize=figsize, color=color, fontsize=fontsize)  # plot histogram
-            for i in range(n_components):
+            for i in range(len(para[0])):
                 ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
             ax.plot(x, sum(y_fit), 'r-')
 
