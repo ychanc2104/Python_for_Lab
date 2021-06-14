@@ -1,9 +1,5 @@
-from basic.select import get_mat, get_files, select_file
+from basic.select import get_mat
 from EM_Algorithm.EM import EM
-import numpy as np
-import pandas as pd
-import random
-import string
 import os
 
 def get_params(dwell, n_component=None):
@@ -28,9 +24,10 @@ def collect_params(*args):
 if __name__ == '__main__':
 
     # path = select_file()
-    path = r'C:\Users\pine\Desktop\vbFRET_dwell time\Transmat_3Dmc1+1S1M.mat'
+    path = r'/home/hwligroup/Desktop/vbFRET_dwell time/SS/Transmat_Dmc1+1SS.mat'
     state = [2,3]
-    n_component = None ## if n is None, auto-find n
+    n_component = 2 ## if n is None, auto-find n
+
     ## parse data
     name = os.path.split(path)[-1]
     data = get_mat(path)
@@ -51,7 +48,7 @@ if __name__ == '__main__':
                                                      [tau_all, tau_i],
                                                      [LLE_all, ln_likelihood])
 
-    EM_p.plot_fit_exp(xlim=[0, 10])
+    EM_p.plot_fit_exp(xlim=[0, 10], save=True, path='output.png', xlabel='dwell time (s)', ylabel='survival', figsize=(10,10))
     EM_p.plot_EM_results()
 
     print(f'fraction: {f_all}\n'

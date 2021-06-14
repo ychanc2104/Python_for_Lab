@@ -269,8 +269,8 @@ class EM:
         paras = self.para_final
         labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=paras)
 
-        x = np.linspace(min(data[:,0]), max(data[:,0]), 100)
-        t = np.linspace(min(data[:,1]), max(data[:,1]), 100)
+        x = np.linspace(min(data[:,0]), max(data[:,0]+10), 100)
+        t = np.linspace(min(data[:,1]), max(data[:,1]+10), 100)
         x_mesh, t_mesh = np.meshgrid(x, t)
         x_t = np.array([x_mesh.ravel(), t_mesh.ravel()]).T
         data_fitted = ln_gau_exp_pdf(x_t, args=paras)
@@ -434,6 +434,7 @@ class EM:
     ##  calculate log-likelihood of given parameters, function is log-function
     def __cal_LLE(self, data, function, para):
         ln_likelihood = sum([np.log(sum(np.exp(function(data[i,:].reshape(1,-1), args=para).ravel()))) for i in range(data.shape[0])])
+        ln_likelihood = np.array(ln_likelihood, ndmin=1)
         self.ln_likelihood = ln_likelihood
         return ln_likelihood
 

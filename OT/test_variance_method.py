@@ -42,11 +42,12 @@ noise = 1
 
 signal_connect = gen_Poi_2step(stepsize=stepsize, tau=tau, n_events=n_events, noise=noise, fs=fs)
 t = np.arange(len(signal_connect))/fs
-fig, ax = plt.subplots()
+fig, ax = plt.subplots(figsize=(10,10))
 ax.plot(t, signal_connect)
 ax.set_xlabel('Time (s)', fontsize=22)
 ax.set_ylabel('Signal (a.u.)', fontsize=22)
-
+ax.set_xlim(0,10)
+ax.set_ylim(0,100)
 
 VA_test = VA(signal_connect, fs, t_end=2)
 time, varX, semX = VA_test.analyze()
