@@ -130,6 +130,36 @@ class EM:
         # labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=para)
         return f_f, m_f, s_f, tau_f, converged, ln_likelihood
 
+    ## set given m
+    def GPEM_set(self, n_components, m_set, tolerance=1e-2, rand_init=False):
+        data = self.data ## (n_samples, 2)
+        x = data[:, 0] ## Gaussian R.V.
+        y = data[:, 1] ## Poisson R.V.
+        self.tolerance = tolerance
+        ##  initialize EM parameters
+        m_fix = m_set.copy()
+        f1, m, s1, loop, improvement = self.__init_GMM(data[:,0], n_components=n_components, rand_init=rand_init)
+        f2, tau, s2, loop, improvement = self.__init_PEM(data[:,1], n_components=n_components, rand_init=rand_init)
+        converged = improvement < tolerance
+        while (loop < 20 or ~converged) and loop < 500:
+            prior_prob = self.__weighting(f1, m_fix, s1, tau, function=ln_gau_exp_pdf)
+            m_fix = np.append(m_fix, m_set)
+            f1, m1_notuse, s1 = self.__update_f_m_s(data[:,0].reshape(-1,1), prior_prob, f1, m_fix, s1)
+            f2, tau, s2 = self.__update_f_m_s(data[:,1].reshape(-1,1), prior_prob, f2, tau, s2)
+            improvement = self.__cal_improvement(f1, m_fix, s1, tau)
+            converged = improvement < tolerance
+            loop += 1
+        f1, m_fix, s1, tau = self.__reshape_all(f1, m_fix, s1, tau, n_rows=loop+1, n_cols=n_components)
+        self.para_progress = [f1, m_fix, s1, tau]
+        m_fix_f, f_f, s_f, tau_f = self.__sort_according(m_fix[-1], f1[-1], s1[-1], tau[-1])
+        self.para_final = [f_f, m_fix_f, s_f, tau_f]
+        para = self.para_final
+        ln_likelihood = self.__cal_LLE(data, function=ln_gau_exp_pdf, para=para)
+        converged = np.array([converged] * n_components)
+        self.converged = converged
+        # labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=para)
+        return f_f, m_fix_f, s_f, tau_f, converged, ln_likelihood
+
     ##  iteratively find lowest BIC or AIC value
     def opt_components_iter(self, iteration=10, tolerance=1e-2, mode='GMM', criteria='BIC', figure=False, figsize=(10, 10)):
         n_all, c_all = [], []
@@ -264,7 +294,8 @@ class EM:
             save_img(fig, path)
 
 
-    def plot_gp_contour_2hist(self, xlim=None, ylim=None, figsize=(10,10), bins_x=10, bins_y=10):
+    def plot_gp_contour_2hist(self, xlim=None, ylim=None, figsize=(10,10), bins_x=10, bins_y=10,
+                              save=False, path='2d_scatter.png'):
         data = self.data
         paras = self.para_final
         labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=paras)
@@ -323,6 +354,8 @@ class EM:
 
         # ax_histy.hist(data[:,1], bins=bins_y, orientation='horizontal', color='grey', edgecolor="white")
         plt.show
+        if save == True:
+            save_img(fig, path)
 
 
     def plot_gp_surface(self, x_end=20, t_end=10, xlabel='step size (count)', ylabel='dwell time (s)', zlabel='probability density'):
