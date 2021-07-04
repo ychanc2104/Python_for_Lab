@@ -8,8 +8,8 @@ loss function is un-differentiable
 ##
 from basic.filter import MA
 from ChangePoint_Finding.gen_assembly import *
-import pandas as pd
-from basic.select import select_file
+from basic.file_io import save_img
+
 
 ##
 def slopecurve(data, p):
@@ -102,7 +102,7 @@ def gradescent(data, p_initial, tol=1e-2):
     Res = lossfun(data, p)
     return p, converged, criteria_stop, Res
 
-def plotresult(data_ori, p, dt=0.03):
+def plotresult(data_ori, p, dt=0.03, show=False, save=False, path='output.png'):
     data_filter = MA(data_ori, 60)
     BM_initial_fit = np.mean(data_ori[:p[0]])
     BM_final_fit = np.mean(data_ori[p[1]:])
@@ -114,13 +114,16 @@ def plotresult(data_ori, p, dt=0.03):
     curve_final_fit = BM_final_fit * np.ones(len(data_ori) - p[1])
     data_fit = np.append(np.append(curve_initial_fit,curve_drop_fit), curve_final_fit)
     t_fit = np.arange(0, len(data_fit)) * dt
-    fig, ax = plt.subplots(figsize=(10,8))
-    ax.plot(t_fit, data_ori, '.', color='grey', markersize=2)
-    ax.plot(t_fit, data_filter, '.', color='k', markersize=3)
-    ax.plot(t_fit, data_fit, '-', color='r', linewidth=4)
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('BM (nm)')
-    plt.show()
+    if show == True or save == True:
+        fig, ax = plt.subplots(figsize=(10,8))
+        ax.plot(t_fit, data_ori, '.', color='grey', markersize=2)
+        ax.plot(t_fit, data_filter, '.', color='k', markersize=3)
+        ax.plot(t_fit, data_fit, '-', color='r', linewidth=4)
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('BM (nm)')
+        plt.show()
+    if save == True:
+        save_img(fig, save_path=path)
     return BM_initial_fit, BM_final_fit, velocity
 
 
