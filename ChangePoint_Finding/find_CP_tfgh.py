@@ -8,7 +8,7 @@ path = select_file()
 df = pd.read_excel(path, sheet_name="工作表1")
 data_ori = np.array(df).T
 data = nordata(data_ori)
-n_data = data.shape[1]
+n_data = data.shape[0]
 # n_data = 4
 
 p = np.reshape([4500, 5000]*n_data, (n_data,2))
