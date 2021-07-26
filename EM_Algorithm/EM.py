@@ -2,7 +2,7 @@
 from matplotlib import rcParams
 rcParams["font.family"] = "sans-serif"
 rcParams["font.sans-serif"] = ["Arial"]
-rcParams.update({'font.size': 18})
+rcParams.update({'font.size': 12})
 # import matplotlib
 # matplotlib.use('Agg')
 from basic.binning import binning, scatter_hist
@@ -265,7 +265,7 @@ class EM:
         return fig
 
     ##  plot Gaussian-Poisson contour plot
-    def plot_gp_contour(self, xlim=None, ylim=None, save=False, path='output.png', xlabel='step size (count)', ylabel='dwell time (s)'):
+    def plot_gp_contour(self, xlim=None, ylim=None, save=False, path='output.png', xlabel='Step-size (count)', ylabel='Dwell-time (s)'):
         data = self.data
         paras = self.para_final
         labels, data_cluster = self.predict(data, function=ln_gau_exp_pdf, paras=paras)
@@ -294,7 +294,7 @@ class EM:
             save_img(fig, path)
 
 
-    def plot_gp_contour_2hist(self, xlim=None, ylim=None, figsize=(10,10), bins_x=10, bins_y=10,
+    def plot_gp_contour_2hist(self, xlim=None, ylim=None, figsize=(10,10), fontsize=12, bins_x=10, bins_y=10,
                               save=False, path='2d_scatter.png'):
         data = self.data
         paras = self.para_final
@@ -324,10 +324,12 @@ class EM:
             ax.plot(data_cluster[i][:, 0], data_cluster[i][:, 1], 'o', color=c1, markersize=3)
         for i,fit in enumerate(data_fitted):
             ax.contour(x_mesh, t_mesh, np.exp(fit).reshape(len(x), len(t)), levels=5, cmap=cmaps[i], linewidths=3)
-        ax.set_xlabel('step size (count)', fontsize=22)
-        ax.set_ylabel('dwell time (s)', fontsize=22)
+        ax.set_xlabel('Step-size (count)', fontsize=fontsize)
+        ax.set_ylabel('Dwell-time (s)', fontsize=fontsize)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
+        ax.spines[:].set_linewidth('1.5')  ## xy, axis width
+        ax.tick_params(width=1.5)  ## tick width
 
         ## gaussian plot
         ax_histx = fig.add_subplot(gs[0, 0], sharex=ax)
@@ -336,7 +338,9 @@ class EM:
         for i in range(len(paras[0])):
             ax_histx.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
         ax_histx.plot(x, sum(y_fit), 'r-')
-
+        ax_histx.spines[:].set_linewidth('1.5')  ## xy, axis width
+        ax_histx.tick_params(width=1.5)  ## tick width
+        ax_histx.set_yticks([])
         ## survival plot
         ax_histy = fig.add_subplot(gs[1, 1], sharey=ax)
         data_series = pd.Series(data[:,1].ravel())
@@ -349,6 +353,9 @@ class EM:
         for i in range(len(paras[0])):
             ax_histy.plot(y_fit[i, :], x, '-', color=self.__colors_order()[i])
         ax_histy.plot(sum(y_fit), x, 'r--')
+        ax_histy.spines[:].set_linewidth('1.5')  ## xy, axis width
+        ax_histy.tick_params(width=1.5)  ## tick width
+        ax_histy.set_xticks([])
 
         ax_histy.get_legend().remove() ## remove legend
 
@@ -358,7 +365,7 @@ class EM:
             save_img(fig, path)
 
 
-    def plot_gp_surface(self, x_end=20, t_end=10, xlabel='step size (count)', ylabel='dwell time (s)', zlabel='probability density'):
+    def plot_gp_surface(self, x_end=20, t_end=10, xlabel='Step-size (count)', ylabel='Dwell-time (s)', zlabel='probability density'):
         data = self.data
         paras = self.para_final
 
@@ -393,8 +400,8 @@ class EM:
 
     ##  plot the survival function
     def plot_fit_exp(self, xlim=None, ylim=[0,1], save=False, path='output.png',
-                     xlabel='dwell time (s)', ylabel='survival', figsize=(10,10),
-                     para=None):
+                     xlabel='Dwell-time (s)', ylabel='Survival', figsize=(10,10),
+                     para=None, fontsize=12, remove_xtick=False, remove_ytick=False, line_width=1.5):
         data = self.data
         if para == None:
             para = self.para_final
@@ -405,10 +412,16 @@ class EM:
         for i in range(len(para[0])):
             ax.plot(x, y_fit[i, :], '-', color=self.__colors_order()[i])
         ax.plot(x, sum(y_fit), 'r--')
-        ax.set_xlabel(xlabel, fontsize=22)
-        ax.set_ylabel(ylabel, fontsize=22)
+        ax.set_xlabel(xlabel, fontsize=fontsize)
+        ax.set_ylabel(ylabel, fontsize=fontsize)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
+        ax.spines[:].set_linewidth(f'{line_width}')  ## xy, axis width
+        ax.tick_params(width=line_width)  ## tick width
+        if remove_xtick:
+            ax.set_xticks([])
+        if remove_ytick:
+            ax.set_yticks([])
         plt.show()
         if save == True:
             save_img(fig, path)
@@ -416,8 +429,8 @@ class EM:
 
     ##  plot data histogram and its gaussian EM (GMM) results
     def plot_fit_gauss(self, xlim=None, ylim=None, save=False, path='output.png', scatter=False,
-                       figsize=(10,8), color="grey", fontsize=22, xlabel='step size (count)',
-                       ylabel='probability density (1/$\mathregular{count}$)', para=None):
+                       figsize=(10,8), color="grey", fontsize=22, xlabel='Step-size (count)',
+                       ylabel='Probability density (1/$\mathregular{count}$)', para=None):
         data = self.data
         if para == None:
             para = self.para_final
@@ -446,6 +459,8 @@ class EM:
         ax.set_ylabel(ylabel, fontsize=fontsize)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
+        ax.spines[:].set_linewidth('1.5')  ## xy, axis width
+        ax.tick_params(width=1.5)  ## tick width
         plt.show()
         if save == True:
             save_img(fig, path)

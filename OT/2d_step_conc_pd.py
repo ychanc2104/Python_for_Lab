@@ -22,19 +22,21 @@ fig = plt.figure(figsize=(5,13))
 gs = fig.add_gridspec(5, hspace=0)
 axs = gs.subplots(sharex=True, sharey=True)
 
-x = np.linspace(0, 15, 50)
+x = np.linspace(0, 12, 200)
 for i in range(len(f_all)):
     y = f_all[i]*gauss(x, xm=m_all[i], s=s_all[i])
     axs[fig_n[i]].plot(x, y, color=colors[i])
-
+    axs[fig_n[i]].spines[:].set_linewidth('1.5')  ## xy, axis width
+    axs[fig_n[i]].tick_params(width=1.5)  ## tick width
 
 for j in range(5): ## five figures
 
-    axs[j].errorbar(mean[j], 0, xerr=err[j], fmt='none', ecolor='r',
-                    color='r', elinewidth=1, capsize=1)
-    axs[j].scatter(mean[j], 0, s=7, color='r')
+    axs[j].errorbar(mean[j], 0.03, xerr=err[j], fmt='none', ecolor='r',
+                    color='r', elinewidth=3, capsize=5)
+    axs[j].scatter(mean[j], 0.03, s=30, color='r')
     axs[j].set_xlabel('Step-size (count)')
     axs[j].set_xlim(0, 12)
-
+    axs[fig_n[i]].spines[:].set_linewidth('1.5') ## xy, axis width
+    axs[fig_n[i]].tick_params(width=1.5) ## tick width
 
 save_img(fig, 'output.png')

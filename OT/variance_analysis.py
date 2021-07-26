@@ -1,7 +1,4 @@
-from matplotlib import rcParams
-rcParams["font.family"] = "sans-serif"
-rcParams["font.sans-serif"] = ["Arial"]
-rcParams.update({'font.size': 18})
+
 import pandas as pd
 from basic.select import select_file
 import numpy as np
@@ -9,10 +6,15 @@ import statistics as stat
 import matplotlib.pyplot as plt
 from basic.fitting import linear_eq, L_fit
 from basic.file_io import save_img
-
+from matplotlib import rcParams
+rcParams["font.family"] = "sans-serif"
+rcParams["font.sans-serif"] = ["Arial"]
+rcParams.update({'font.size': 12})
 ### import data
-# path = select_file()
-path = r'/home/hwligroup/Desktop/Data/time trace/m51+mSS all traces/m51_SSFL_3.0uM_All.xlsx'
+fontsize=12
+figsize=(6,5)
+path = select_file()
+# path = r'/home/hwligroup/Desktop/Data/time trace/m51+mSS all traces/m51_SSFL_3.0uM_All.xlsx'
 df = pd.read_excel(path)
 data = np.array(df.dropna(axis='columns', how='all'))
 n_traces = int(data.shape[1]/4)
@@ -112,20 +114,23 @@ xm_1_fit = xm_1[0:points_tofit]
 ## fit last section
 # varX_1_fit = varX_1[points_tofit:]
 # xm_1_fit = xm_1[points_tofit:]
-f = np.array([1])
-d = np.array([8.3])
-tau = np.array([1.71])
-slope_e = np.sum(f*d**2/tau)
+# f = np.array([1])
+# d = np.array([8.3])
+# tau = np.array([1.71])
+# slope_e = np.sum(f*d**2/tau)
 ## parameters for fitting average of all time-variance traces
 slope_1, intercept_1 = L_fit(t_fit, varX_1_fit)
-fig, ax = plt.subplots(figsize=(10,10))
+fig, ax = plt.subplots(figsize=figsize)
 ax.errorbar(t, varX_1, yerr=semX_1, color='dodgerblue', marker='o', ls='--', capsize=5, capthick=1, ecolor='black')
 # ax.plot(t, linear_eq(t, slope_1, intercept_1), 'r--')
-ax.plot(t, linear_eq(t, slope_e, intercept_1), 'r--')
+ax.plot(t, linear_eq(t, 31.06, intercept_1+0), 'r--')
+ax.set_xlabel('Time (s)', fontsize=fontsize)
+ax.set_ylabel('Variance ($\mathregular{count^2}$)', fontsize=fontsize)
+ax.set_xlim(0, 0.5)
+ax.set_ylim(0, 20)
+ax.spines[:].set_linewidth('1.5') ## xy, axis width
+ax.tick_params(width=1.5) ## tick width
 
-ax.set_xlabel('Time (s)', fontsize=22)
-ax.set_ylabel('Variance ($\mathregular{count^2}$)', fontsize=22)
-ax.set_xlim(0,1)
 # save_img(fig, 'VA_2.0.png')
 
 # randomness_avg_fit = (varX_1_fit[-1] - intercept_1)/()

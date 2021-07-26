@@ -1,13 +1,13 @@
 import numpy as np
 
 ##  moving average filter
-def MA(data, window, mode='silding'):
+def MA(data, window, mode='sliding'):
     data = np.array(data)
     n = len(data)
     data_filter = []
     m = int(window)
 
-    if mode == 'silding':
+    if mode == 'sliding':
         for i in range(n):
             if i < m:
                 data_filter += [np.mean(data[:(i+1)])]
